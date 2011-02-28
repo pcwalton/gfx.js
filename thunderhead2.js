@@ -245,6 +245,8 @@ void main() {\n\
         this._matrixStack = [];
         this._matrixStack.size = 0;
 
+        this._imageTextureCache = {};
+
         var ctx = this._ctx = canvas.getContext('experimental-webgl');
         this._buildShaders();
 
@@ -307,6 +309,37 @@ void main() {\n\
             ctx.bufferData(ctx.ARRAY_BUFFER, new Float32Array(QUAD_TEXTURE_COORDS),
                 ctx.STATIC_DRAW);
             ctx.vertexAttribPointer(this._texCoordLoc, 2, ctx.FLOAT, false, 0, 0);
+        },
+
+        // Creates or reuses a texture for the given image.
+        _createImageTexture: function(image) {
+            var cached = this._imageTextureCache[image.src];
+            if (cached) {
+                for (var i = 0; i < cached.length; i++) {
+                    if (cached[i].image === image)
+                        return cached[i].texture;
+                }
+            }
+
+            var ctx = this._ctx;
+            var texture = ctx.createTexture();
+            ctx.bindTexture(ctx.TEXTURE_2D, texture);
+            ctx.texImage2D(ctx.TEXTURE_2D, 0, ctx.RGBA, ctx.RGBA,
+                ctx.UNSIGNED_BYTE, image);
+            ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MAG_FILTER,
+                ctx.LINEAR);
+            ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MIN_FILTER,
+                ctx.LINEAR);
+            ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_S,
+                ctx.CLAMP_TO_EDGE);
+            ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_T,
+                ctx.CLAMP_TO_EDGE);
+
+            if (!cached)
+                cached = this._imageTextureCache[image.src] = [];
+            cached.push({ image: image, texture: texture });
+
+            return texture;
         },
 
         // Creates a vertex or fragment shader.
@@ -402,24 +435,9 @@ void main() {\n\
         if (this._webGL)
             return; // already done
 
-        this._webGL = {};
-
-        // TODO: Cache the textures. We should move this stuff into the renderer.
-
-        // Create the texture.
-        var texture = this._webGL.texture = ctx.createTexture();
-        ctx.bindTexture(ctx.TEXTURE_2D, texture);
-        ctx.texImage2D(ctx.TEXTURE_2D, 0, ctx.RGBA, ctx.RGBA, ctx.UNSIGNED_BYTE,
-            this.image);
-        ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MAG_FILTER, ctx.LINEAR);
-        ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MIN_FILTER, ctx.LINEAR);
-        ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_S, ctx.CLAMP_TO_EDGE);
-        ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_T, ctx.CLAMP_TO_EDGE);
-
-        // Create the texture coordinate buffer.
-        var texCoordBuffer = ctx.createBuffer();
-        ctx.bindBuffer(ctx.ARRAY_BUFFER, texCoordBuffer);
-    }
+        var webGL = this._webGL = {};
+        webGL.texture = renderer._createImageTexture(this.image);
+    };
 
     // Renders an image layer via WebGL.
     Th2.ImageLayer.prototype.renderViaWebGL = function(renderer, ctx) {
