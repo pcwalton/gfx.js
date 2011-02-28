@@ -5,7 +5,7 @@
  *	Patrick Walton <pcwalton@mozilla.com>
  */
 
-const FISH_COUNT = 20;
+const FISH_COUNT = 200;
 const FISH_SWIM_SPEED = 10;
 
 var canvas = document.getElementById('c');
@@ -64,7 +64,6 @@ function Controller() {
 
 Controller.prototype = {
 	onRender: function() {
-		console.log("onrender");
 		var fishes = this.fishes;
 		for (var i = 0; i < fishes.length; i++)
 			fishes[i].swim();
