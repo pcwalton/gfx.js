@@ -167,9 +167,9 @@ Th2 = (function() {
         // This horrible thing avoids creating a new closure on every render.
         _renderCallback: function() { this.render(); },
 
-        // Schedules a render operation at the next appropriate opportunity. Use this
-        // method whenever you've made a change that doesn't automatically trigger
-        // rendering.
+        // Schedules a render operation at the next appropriate opportunity.
+        // Use this method whenever you've made a change that doesn't
+        // automatically trigger rendering.
         renderSoon: function() {
             if (this._needsRender)
                 return;
@@ -240,8 +240,8 @@ void main() {\n\
 
         this._mvpMatrix = new Th2.Matrix();
 
-        // Stack of matrices - basically a free list to avoid accumulating garbage
-        // when rendering.
+        // Stack of matrices - basically a free list to avoid accumulating
+        // garbage when rendering.
         this._matrixStack = [];
         this._matrixStack.size = 0;
 
@@ -274,7 +274,8 @@ void main() {\n\
         // Builds the shaders and the program.
         _buildShaders: function() {
             var ctx = this._ctx;
-            var vertexShader = this._createShader(ctx.VERTEX_SHADER, VERTEX_SHADER);
+            var vertexShader = this._createShader(ctx.VERTEX_SHADER,
+                VERTEX_SHADER);
             var fragmentShader = this._createShader(ctx.FRAGMENT_SHADER,
                 FRAGMENT_SHADER);
 
@@ -300,15 +301,17 @@ void main() {\n\
 
             var positionBuffer = this._positionBuffer = ctx.createBuffer();
             ctx.bindBuffer(ctx.ARRAY_BUFFER, positionBuffer);
-            ctx.bufferData(ctx.ARRAY_BUFFER, new Float32Array(QUAD_VERTEX_POSITIONS), 
-                ctx.STATIC_DRAW);
-            ctx.vertexAttribPointer(this._positionLoc, 3, ctx.FLOAT, false, 0, 0);
+            ctx.bufferData(ctx.ARRAY_BUFFER,
+                new Float32Array(QUAD_VERTEX_POSITIONS), ctx.STATIC_DRAW);
+            ctx.vertexAttribPointer(this._positionLoc, 3, ctx.FLOAT, false, 0,
+                0);
 
             var texCoordBuffer = this._texCoordBuffer = ctx.createBuffer();
             ctx.bindBuffer(ctx.ARRAY_BUFFER, texCoordBuffer);
-            ctx.bufferData(ctx.ARRAY_BUFFER, new Float32Array(QUAD_TEXTURE_COORDS),
-                ctx.STATIC_DRAW);
-            ctx.vertexAttribPointer(this._texCoordLoc, 2, ctx.FLOAT, false, 0, 0);
+            ctx.bufferData(ctx.ARRAY_BUFFER,
+                new Float32Array(QUAD_TEXTURE_COORDS), ctx.STATIC_DRAW);
+            ctx.vertexAttribPointer(this._texCoordLoc, 2, ctx.FLOAT, false, 0,
+                0);
         },
 
         // Creates or reuses a texture for the given image.
@@ -362,8 +365,8 @@ void main() {\n\
             ctx.drawArrays(ctx.TRIANGLE_STRIP, 0, 4);
         },
 
-        // Sets the OpenGL matrix (our vertex shader's matrix, really) to the value
-        // of @_matrix.
+        // Sets the OpenGL matrix (our vertex shader's matrix, really) to the
+        // value of @_matrix.
         _reloadMatrix: function() {
             this._ctx.uniformMatrix4fv(this._transformMatrixLoc, false,
                 this._matrix.array);
@@ -375,8 +378,8 @@ void main() {\n\
             if ('renderViaWebGL' in layer)
                 layer.renderViaWebGL(this, this._ctx);
 
-            // Save the old matrix. We use a fixed stack of matrices per renderer to
-            // avoid accumulating garbage.
+            // Save the old matrix. We use a fixed stack of matrices per
+            // renderer to avoid accumulating garbage.
             var oldMatrix;
             var matrixStack = this._matrixStack;
             if (matrixStack[matrixStack.size]) {
@@ -412,7 +415,8 @@ void main() {\n\
             if (this.onRender)
                 this.onRender();
 
-            var ctx = this._ctx, program = this._program, canvas = this._canvas;
+            var ctx = this._ctx, program = this._program;
+            var canvas = this._canvas;
             var width = canvas.width, height = canvas.height;
 
             var ortho = this._mvpMatrix.ortho(0, width, height, 0, .1, 1000);

@@ -5,7 +5,7 @@
  *	Patrick Walton <pcwalton@mozilla.com>
  */
 
-const FISH_COUNT = 20;
+const FISH_COUNT = 500;
 const FISH_SWIM_SPEED = 10;
 
 var canvas = document.getElementById('c');
@@ -35,9 +35,11 @@ Fish.prototype = {
 		var y = bounds.y + this.deltaY;
 		var w = bounds.w, h = bounds.h;
 
-		if ((x < 0 && this.deltaX < 0) || (x > canvasWidth - w && this.deltaX > 0))
+		if ((x < 0 && this.deltaX < 0) ||
+                (x > canvasWidth - w && this.deltaX > 0))
 			this.deltaX = -this.deltaX;
-		if ((y < 0 && this.deltaY < 0) || (y > canvasHeight - h && this.deltaY > 0))
+		if ((y < 0 && this.deltaY < 0) ||
+                (y > canvasHeight - h && this.deltaY > 0))
 			this.deltaY = -this.deltaY;
 
 		bounds.x = x;
@@ -57,7 +59,8 @@ function Controller() {
 		rootLayer.children.push(fish.layer);
 	}
 
-	var renderer = this.renderer = new Th2.WebGLCanvasRenderer(canvas, rootLayer);
+	var renderer = this.renderer = new Th2.WebGLCanvasRenderer(canvas,
+        rootLayer);
 	renderer.onRender = this.onRender.bind(this);
 	renderer.renderSoon();
 }
@@ -76,5 +79,6 @@ $(function() {
 	fishImage = new Image();
 	fishImage.onload = function() { new Controller; };
 	fishImage.src = 'fish.png';
+    //fishImage.width = fishImage.height = 256;
 });
 
