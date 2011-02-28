@@ -5,31 +5,77 @@
  *	Patrick Walton <pcwalton@mozilla.com>
  */
 
-const FISH_COUNT = 5;
+const FISH_COUNT = 20;
+const FISH_SWIM_SPEED = 10;
 
+var canvas = document.getElementById('c');
 var fishImage;
 
-function imagesLoaded() {
-	var canvas = $('#c')[0];
-	var width = canvas.width, height = canvas.height;
+function Fish() {
+	var canvasWidth = canvas.width, canvasHeight = canvas.height;
 
+	var size = Math.random() * 0.5;
+	var width = (fishImage.width * size) | 0;
+	var height = (fishImage.height * size) | 0;
+
+	var layer = this.layer = new Th2.ImageLayer(fishImage);
+	layer.bounds = new Th2.Rect((Math.random() * (canvasWidth - width)) | 0,
+		(Math.random() * (canvasHeight - height)) | 0, width, height);
+
+	this.deltaX = (Math.random() - 0.5) * FISH_SWIM_SPEED;
+	this.deltaY = (Math.random() - 0.5) * FISH_SWIM_SPEED;
+}
+
+Fish.prototype = {
+	swim: function() {
+		var canvasWidth = canvas.width, canvasHeight = canvas.height;
+
+		var bounds = this.layer.bounds;
+		var x = bounds.x + this.deltaX;
+		var y = bounds.y + this.deltaY;
+		var w = bounds.w, h = bounds.h;
+
+		if ((x < 0 && this.deltaX < 0) || (x > canvasWidth - w && this.deltaX > 0))
+			this.deltaX = -this.deltaX;
+		if ((y < 0 && this.deltaY < 0) || (y > canvasHeight - h && this.deltaY > 0))
+			this.deltaY = -this.deltaY;
+
+		bounds.x = x;
+		bounds.y = y;
+		bounds.w = w;
+		bounds.h = h;
+	}
+};
+
+function Controller() {
 	var rootLayer = new Th2.Layer(canvas);
+
+	var fishes = this.fishes = [];
 	for (var i = 0; i < FISH_COUNT; i++) {
-		var fishLayer = new Th2.ImageLayer(fishImage);
-		fishLayer.bounds.x = (Math.random() * width) | 0;
-		fishLayer.bounds.y = (Math.random() * height) | 0;
-		rootLayer.children.push(fishLayer);
+		var fish = new Fish;
+		fishes.push(fish);
+		rootLayer.children.push(fish.layer);
 	}
 
-	var renderer = new Th2.WebGLCanvasRenderer(rootLayer, canvas);
-	renderer.render();
+	var renderer = this.renderer = new Th2.WebGLCanvasRenderer(canvas, rootLayer);
+	renderer.onRender = this.onRender.bind(this);
+	renderer.renderSoon();
 }
 
-function main() {
+Controller.prototype = {
+	onRender: function() {
+		console.log("onrender");
+		var fishes = this.fishes;
+		for (var i = 0; i < fishes.length; i++)
+			fishes[i].swim();
+		this.renderer.renderSoon();
+	}
+};
+
+$(function() {
+	// Load our image!
 	fishImage = new Image();
-	fishImage.onload = imagesLoaded;
+	fishImage.onload = function() { new Controller; };
 	fishImage.src = 'fish.png';
-}
-
-$(main);
+});
 

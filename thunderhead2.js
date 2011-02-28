@@ -26,19 +26,35 @@ Th2 = (function() {
         }
     }
 
+    // Bare-bones class system, just enough to get more than one level of
+    // prototypical inheritance off the ground.
+
+    Th2.Class = function() {
+        return function(subclass) {
+            // FIXME: Doesn't work with getters and setters.
+            for (var key in subclass)
+                this[key] = subclass[key];
+        }
+    };
+
     // Simple matrix class, based on glMatrix:
     //      http://code.google.com/p/glmatrix/source/browse/glMatrix.js  
 
     Th2.Matrix = function(otherMatrix) {
-        if (otherMatrix == null)
-            return;
-
-        var a = this.array = [];
-        for (var i = 0; i < 16; i++)
-            a[i] = otherMatrix.array[i];
+        this.array = [];
+        if (otherMatrix != null)
+            this.copyFrom(otherMatrix);
     }
 
     Th2.Matrix.prototype = {
+        // Replaces the current matrix with the given matrix.
+        copyFrom: function(otherMatrix) {
+            var a = this.array = [];
+            for (var i = 0; i < 16; i++)
+                a[i] = otherMatrix.array[i];
+            return this;
+        },
+
         // Replaces the current matrix with the identity matrix.
         identity: function() {
             this.array = [
@@ -69,6 +85,7 @@ Th2 = (function() {
                 a[i] *= x;
             for (i = 4; i < 8; i++)
                 a[i] *= y;
+            return this;
         },
 
         // Translates the current matrix by the given 2D coordinates.
@@ -97,13 +114,6 @@ Th2 = (function() {
         this.x = x; this.y = y; this.w = w; this.h = h;
     };
 
-    Th2.Rect.prototype = {
-        // Returns a *snapshot* of the current origin of this rect.
-        get origin()    { return { x: this.x, y: this.y }; },
-        // Returns a *snapshot* of the current size of this rect.
-        get size()      { return { w: this.w, h: this.h }; }
-    };
-
     /*
      *  Layers: objects that describe what to render
      */
@@ -116,11 +126,7 @@ Th2 = (function() {
             this.bounds = new Th2.Rect(element.getBoundingClientRect());
     }
 
-    Th2.LayerClass = function(subclass) {
-        for (var key in subclass)
-            this[key] = subclass[key];
-    };
-
+    Th2.LayerClass = new Th2.Class;
     Th2.Layer.prototype = Th2.LayerClass.prototype = {};
 
     // Image layers
@@ -137,6 +143,40 @@ Th2 = (function() {
      *  Renderers: objects that describe how to render the layers
      */
 
+    // Basic functionality common to all renderers.
+
+    const VENDOR_PREFIXES = [ 'moz', 'webkit', 'o', 'ms' ];
+
+    Th2.RendererClass = new Th2.Class;
+
+    Th2.RendererClass.prototype = {
+        // Schedules a render operation at the next appropriate opportunity. Use this
+        // method whenever you've made a change that doesn't automatically trigger
+        // rendering.
+        renderSoon: function() {
+            if (this._needsRender)
+                return;
+            this._needsRender = true;
+
+            if (!this.renderSoon._rafName) {
+                if (window.requestAnimationFrame) {
+                    this.renderSoon._rafName = 'requestAnimationFrame';
+                } else {
+                    // Sigh...
+                    for (var i = 0; i < VENDOR_PREFIXES.length; i++) {
+                        var name = VENDOR_PREFIXES[i] + 'RequestAnimationFrame';
+                        if (window[name]) {
+                            this.renderSoon._rafName = name;
+                            break;
+                        }
+                    }
+                }
+            }
+                
+            window[this.renderSoon._rafName](this.render.bind(this));
+        }
+    };
+
     // The WebGL canvas renderer
 
     const VERTEX_SHADER = "\n\
@@ -146,7 +186,7 @@ attribute vec4 texCoord;\n\
 attribute vec4 position;\n\
 varying vec2 texCoord2;\n\
 void main() {\n\
-    gl_Position = transformMatrix * mvpMatrix * position;\n\
+    gl_Position = mvpMatrix * transformMatrix * position;\n\
     texCoord2 = texCoord.st;\n\
 }\n\
 ";
@@ -174,9 +214,16 @@ void main() {\n\
         1, 1
     ];
 
-    Th2.WebGLCanvasRenderer = function(rootLayer, canvas) {
+    Th2.WebGLCanvasRenderer = function(canvas, rootLayer) {
         this.rootLayer = rootLayer;
         this._canvas = canvas;
+
+        this._mvpMatrix = new Th2.Matrix();
+
+        // Stack of matrices - basically a free list to avoid accumulating garbage
+        // when rendering.
+        this._matrixStack = [];
+        this._matrixStack.size = 0;
 
         var ctx = this._ctx = canvas.getContext('experimental-webgl');
         this._buildShaders();
@@ -187,28 +234,21 @@ void main() {\n\
         this._mvpMatrixLoc = ctx.getUniformLocation(program, 'mvpMatrix');
         this._positionLoc = ctx.getAttribLocation(program, 'position');
         this._texCoordLoc = ctx.getAttribLocation(program, 'texCoord');
-        console.log("position = " + this._positionLoc + ", mvp = " +
-            this._mvpMatrixLoc + ", tc = " + this._texCoordLoc);
         ctx.enableVertexAttribArray(this._positionLoc);
         ctx.enableVertexAttribArray(this._texCoordLoc);
 
         ctx.clearColor(0, 0, 0, 1);
-        ctx.clearDepth(10000);
 
-        ctx.enable(ctx.DEPTH_TEST);
         ctx.enable(ctx.BLEND);
         ctx.blendFunc(ctx.SRC_ALPHA, ctx.ONE_MINUS_SRC_ALPHA);
 
         this._buildVertexBuffers();
 
-        var ortho = new Th2.Matrix().ortho(0, 1, 1, 0, .1, 1000);
-        ctx.uniformMatrix4fv(this._mvpMatrixLoc, false, ortho.array);
-
         this._matrix = new Th2.Matrix().identity();
         this._reloadMatrix();
     };
 
-    Th2.WebGLCanvasRenderer.prototype = {
+    Th2.WebGLCanvasRenderer.prototype = new Th2.RendererClass({
         // Builds the shaders and the program.
         _buildShaders: function() {
             var ctx = this._ctx;
@@ -272,8 +312,6 @@ void main() {\n\
         // Sets the OpenGL matrix (our vertex shader's matrix, really) to the value
         // of @_matrix.
         _reloadMatrix: function() {
-            console.log("setting " + this._transformMatrixLoc + " to " +
-                this._matrix.array.toSource());
             this._ctx.uniformMatrix4fv(this._transformMatrixLoc, false,
                 this._matrix.array);
         },
@@ -281,37 +319,61 @@ void main() {\n\
         _renderLayer: function(layer) {
             if ('initWebGL' in layer)
                 layer.initWebGL(this, this._ctx);
-
-            var matrix = this._matrix;
-            var oldMatrix = new Th2.Matrix(matrix);
-            //matrix.translate(layer.bounds.origin);
-            matrix.scale(layer.bounds.size);
-            this._reloadMatrix();
-
             if ('renderViaWebGL' in layer)
                 layer.renderViaWebGL(this, this._ctx);
 
-            var children = layer.children;
-            for (var i = 0; i < children.length; i++)
-                this._renderLayer(children[i]);
+            // Save the old matrix. We use a fixed stack of matrices per renderer to
+            // avoid accumulating garbage.
+            var oldMatrix;
+            var matrixStack = this._matrixStack;
+            if (matrixStack[matrixStack.size]) {
+                oldMatrix = matrixStack[matrixStack.size++];
+                oldMatrix.copyFrom(this._matrix);
+            } else {
+                oldMatrix = new Th2.Matrix(this._matrix);
+                matrixStack.push(oldMatrix);
+                matrixStack.size++;
+            }
 
-            this._matrix = oldMatrix;
+            var children = layer.children;
+            for (var i = 0; i < children.length; i++) {
+                var child = children[i];
+
+                // Transform to the child's bounding rect.
+                var matrix = this._matrix.copyFrom(oldMatrix);
+                var bounds = child.bounds;
+                matrix.translate(bounds.x, bounds.y);
+                matrix.scale(bounds.w, bounds.h);
+                this._reloadMatrix();
+
+                this._renderLayer(child);
+            }
+
+            this._matrix.copyFrom(oldMatrix);
+            matrixStack.size--;
         },
 
         // Renders the layer tree.
         render: function() {
+            this._needsRender = false;
+            if (this.onRender)
+                this.onRender();
+
             var ctx = this._ctx, program = this._program, canvas = this._canvas;
             var width = canvas.width, height = canvas.height;
 
+            var ortho = this._mvpMatrix.ortho(0, width, height, 0, .1, 1000);
+            ctx.uniformMatrix4fv(this._mvpMatrixLoc, false, ortho.array);
+
             ctx.viewport(0, 0, width, height);
-            ctx.clear(ctx.COLOR_BUFFER_BIT | ctx.DEPTH_BUFFER_BIT);
+            ctx.clear(ctx.COLOR_BUFFER_BIT);
 
             this._matrix.identity();
             this._reloadMatrix();
 
             this._renderLayer(this.rootLayer);
         }
-    };
+    });
 
     // Image layer rendering for WebGL
 
@@ -321,6 +383,8 @@ void main() {\n\
             return; // already done
 
         this._webGL = {};
+
+        // TODO: Cache the textures. We should move this stuff into the renderer.
 
         // Create the texture.
         var texture = this._webGL.texture = ctx.createTexture();
@@ -337,9 +401,8 @@ void main() {\n\
         ctx.bindBuffer(ctx.ARRAY_BUFFER, texCoordBuffer);
     }
 
-    // How to render an image layer via WebGL
+    // Renders an image layer via WebGL.
     Th2.ImageLayer.prototype.renderViaWebGL = function(renderer, ctx) {
-        console.log("Rendering image layer!");
         ctx.activeTexture(ctx.TEXTURE0);
         ctx.bindTexture(ctx.TEXTURE_2D, this._webGL.texture);
         renderer._drawQuad();
