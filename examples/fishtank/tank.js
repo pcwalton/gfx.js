@@ -5,8 +5,11 @@
  *	Patrick Walton <pcwalton@mozilla.com>
  */
 
-const FISH_COUNT = 1000;
+const FISH_COUNT = 500;
 const FISH_SWIM_SPEED = 10;
+
+const FORWARD_TRANSFORM = new Th2.Matrix();
+const BACKWARD_TRANSFORM = new Th2.Matrix().translate(1, 0).scale(-1, 1);
 
 var canvas = document.getElementById('c');
 var fishImage;
@@ -14,7 +17,7 @@ var fishImage;
 function Fish() {
 	var canvasWidth = canvas.width, canvasHeight = canvas.height;
 
-	var size = Math.random() * 0.5;
+	var size = Math.random() * 0.3;
 	var width = (fishImage.width * size) | 0;
 	var height = (fishImage.height * size) | 0;
 
@@ -24,6 +27,8 @@ function Fish() {
 
 	this.deltaX = (Math.random() - 0.5) * FISH_SWIM_SPEED;
 	this.deltaY = (Math.random() - 0.5) * FISH_SWIM_SPEED;
+
+    this.setTransform();
 }
 
 Fish.prototype = {
@@ -46,7 +51,17 @@ Fish.prototype = {
 		bounds.y = y;
 		bounds.w = w;
 		bounds.h = h;
-	}
+
+        this.setTransform();
+	},
+
+    setTransform: function() {
+        var layer = this.layer;
+        if (this.deltaX < 0)
+            layer.transform = FORWARD_TRANSFORM;
+        else
+            layer.transform = BACKWARD_TRANSFORM;
+    }
 };
 
 function Controller() {

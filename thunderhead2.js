@@ -54,11 +54,18 @@ Th2 = (function() {
 
     // Simple matrix class, based on glMatrix:
     //      http://code.google.com/p/glmatrix/source/browse/glMatrix.js  
+    //
+    // We alias Matrix to Transform for ease of use.
+    //
+    // TODO: Get rid of the name "Matrix" entirely.
 
-    Th2.Matrix = function(otherMatrix) {
+    Th2.Matrix = Th2.Transform = function(otherMatrix) {
         this.array = [];
+        this._scratch = [];
         if (otherMatrix != null)
             this.copyFrom(otherMatrix);
+        else
+            this.identity();
     };
 
     Th2.Matrix.prototype = {
@@ -75,6 +82,24 @@ Th2 = (function() {
             this.zero();
             var a = this.array;
             a[0] = a[5] = a[10] = a[15] = 1;
+            return this;
+        },
+
+        // Multiplies the current matrix by the given matrix on the left.
+        mul: function(otherMatrix) {
+            var a = this.array, b = otherMatrix.array, c = this._scratch;
+            for (var i = 0; i < 4; i++) {
+                for (var j = 0; j < 4; j++) {
+                    var acc = 0;
+                    for (k = 0; k < 4; k++)
+                        acc += b[i*4 + k] * a[k*4 + j];
+                    c[i*4 + j] = acc;
+                }
+            }
+
+            for (i = 0; i < 16; i++)
+                a[i] = c[i];
+
             return this;
         },
 
@@ -95,7 +120,7 @@ Th2 = (function() {
             return this;
         },
 
-        // Scales the current matrix by the given 2D coordinates.
+        // Scales the current matrix by the given 2D coordinate.
         scale: function(x, y) {
             var a = this.array;
             for (var i = 0; i < 4; i++)
@@ -105,7 +130,7 @@ Th2 = (function() {
             return this;
         },
 
-        // Translates the current matrix by the given 2D coordinates.
+        // Translates the current matrix by the given 2D coordinate.
         translate: function(x, y) {
             var a = this.array;
             a[12] += a[0]*x + a[4]*y + a[8];
@@ -436,6 +461,11 @@ void main() {\n\
                 var bounds = child.bounds;
                 matrix.translate(bounds.x, bounds.y);
                 matrix.scale(bounds.w, bounds.h);
+
+                // Apply the child's transform.
+                if (child.transform)
+                    matrix.mul(child.transform);
+
                 this._reloadMatrix();
 
                 this._renderLayer(child);
