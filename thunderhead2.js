@@ -64,40 +64,21 @@ Th2 = (function() {
 
     // Simple matrix class, based on glMatrix:
     //      http://code.google.com/p/glmatrix/source/browse/glMatrix.js  
-    //
-    // We alias Matrix to Transform for ease of use.
-    //
-    // TODO: Get rid of the name "Matrix" entirely.
 
-    Th2.Matrix = Th2.Transform = function(otherMatrix) {
-        this.array = [];
-        this._scratch = [];
-        if (otherMatrix != null)
-            this.copyFrom(otherMatrix);
+    Th2.Transform = function(otherTransform) {
+        this.matrix = new Float32Array(16);
+        this._scratch = new Float32Array(16);
+        if (otherTransform != null)
+            this.copyFrom(otherTransform);
         else
             this.identity();
     };
 
-    Th2.Matrix.prototype = {
-        // Replaces the current matrix with the given matrix.
-        copyFrom: function(otherMatrix) {
-            var a = this.array;
-            for (var i = 0; i < 16; i++)
-                a[i] = otherMatrix.array[i];
-            return this;
-        },
-
-        // Replaces the current matrix with the identity matrix.
-        identity: function() {
-            this.zero();
-            var a = this.array;
-            a[0] = a[5] = a[10] = a[15] = 1;
-            return this;
-        },
-
-        // Multiplies the current matrix by the given matrix on the left.
-        mul: function(otherMatrix) {
-            var a = this.array, b = otherMatrix.array, c = this._scratch;
+    Th2.Transform.prototype = {
+        // Combines the two transforms by multiplying this matrix by the other
+        // matrix on the left.
+        combine: function(otherTransform) {
+            var a = this.matrix, b = otherTransform.matrix, c = this._scratch;
             for (var i = 0; i < 4; i++) {
                 for (var j = 0; j < 4; j++) {
                     var acc = 0;
@@ -113,12 +94,28 @@ Th2 = (function() {
             return this;
         },
 
-        // Replaces the current matrix with an orthographic projection.
+        // Replaces the current transform with the given transform.
+        copyFrom: function(otherTransform) {
+            var a = this.matrix;
+            for (var i = 0; i < 16; i++)
+                a[i] = otherTransform.matrix[i];
+            return this;
+        },
+
+        // Replaces the current transform with the identity transform.
+        identity: function() {
+            this.zero();
+            var a = this.matrix;
+            a[0] = a[5] = a[10] = a[15] = 1;
+            return this;
+        },
+
+        // Replaces the current transform with an orthographic projection.
         ortho: function(left, right, bottom, top, near, far) {
             this.zero();
 
             var rl = right - left, tb = top - bottom, fn = far - near;
-            var a = this.array;
+            var a = this.matrix;
             a[0] = 2/rl;
             a[5] = 2/tb;
             a[10] = -2/fn;
@@ -130,9 +127,9 @@ Th2 = (function() {
             return this;
         },
 
-        // Scales the current matrix by the given 2D coordinate.
+        // Scales the current transform by the given 2D coordinate.
         scale: function(x, y) {
-            var a = this.array;
+            var a = this.matrix;
             for (var i = 0; i < 4; i++)
                 a[i] *= x;
             for (i = 4; i < 8; i++)
@@ -140,9 +137,9 @@ Th2 = (function() {
             return this;
         },
 
-        // Translates the current matrix by the given 2D coordinate.
+        // Translates the current transform by the given 2D coordinate.
         translate: function(x, y) {
-            var a = this.array;
+            var a = this.matrix;
             a[12] += a[0]*x + a[4]*y + a[8];
             a[13] += a[1]*x + a[5]*y + a[9];
             a[14] += a[2]*x + a[6]*y + a[10];
@@ -150,9 +147,9 @@ Th2 = (function() {
             return this;
         },
 
-        // Replaces the current matrix with a zero matrix.
+        // Replaces the current transform with a zero matrix.
         zero: function() {
-            var a = this.array;
+            var a = this.matrix;
             for (var i = 0; i < 16; i++)
                 a[i] = 0;
             return this;
@@ -281,7 +278,7 @@ void main() {\n\
         this.rootLayer = rootLayer;
         this._canvas = canvas;
 
-        this._mvpMatrix = new Th2.Matrix();
+        this._mvpMatrix = new Th2.Transform();
 
         // Stack of matrices - basically a free list to avoid accumulating
         // garbage when rendering.
@@ -309,7 +306,7 @@ void main() {\n\
 
         this._buildVertexBuffers();
 
-        this._matrix = new Th2.Matrix().identity();
+        this._matrix = new Th2.Transform;
         this._reloadMatrix();
     };
 
@@ -440,7 +437,7 @@ void main() {\n\
         // value of @_matrix.
         _reloadMatrix: function() {
             this._ctx.uniformMatrix4fv(this._transformMatrixLoc, false,
-                this._matrix.array);
+                this._matrix.matrix);
         },
 
         _renderLayer: function(layer) {
@@ -457,7 +454,7 @@ void main() {\n\
                 oldMatrix = matrixStack[matrixStack.size++];
                 oldMatrix.copyFrom(this._matrix);
             } else {
-                oldMatrix = new Th2.Matrix(this._matrix);
+                oldMatrix = new Th2.Transform(this._matrix);
                 matrixStack.push(oldMatrix);
                 matrixStack.size++;
             }
@@ -474,7 +471,7 @@ void main() {\n\
 
                 // Apply the child's transform.
                 if (child.transform)
-                    matrix.mul(child.transform);
+                    matrix.combine(child.transform);
 
                 this._reloadMatrix();
 
@@ -496,7 +493,7 @@ void main() {\n\
             var width = canvas.width, height = canvas.height;
 
             var ortho = this._mvpMatrix.ortho(0, width, height, 0, .1, 1000);
-            ctx.uniformMatrix4fv(this._mvpMatrixLoc, false, ortho.array);
+            ctx.uniformMatrix4fv(this._mvpMatrixLoc, false, ortho.matrix);
 
             ctx.viewport(0, 0, width, height);
             ctx.clear(ctx.COLOR_BUFFER_BIT);
@@ -530,7 +527,7 @@ void main() {\n\
     // Renders an image layer via WebGL.
     Th2.ImageLayer.prototype.renderViaWebGL = function(renderer, ctx) {
         var textureInfo = this.webGLTextureInfo;
-        //ctx.bindBuffer(ctx.ARRAY_BUFFER, textureInfo.coordBuffer);
+        ctx.bindBuffer(ctx.ARRAY_BUFFER, textureInfo.coordBuffer);
         ctx.activeTexture(ctx.TEXTURE0);
         ctx.bindTexture(ctx.TEXTURE_2D, textureInfo.texture);
         renderer._drawQuad();

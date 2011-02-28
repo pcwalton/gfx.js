@@ -5,11 +5,11 @@
  *	Patrick Walton <pcwalton@mozilla.com>
  */
 
-const FISH_COUNT = 1000;
+const FISH_COUNT = 2000;
 const FISH_SWIM_SPEED = 10;
 
-const FORWARD_TRANSFORM = new Th2.Matrix();
-const BACKWARD_TRANSFORM = new Th2.Matrix().translate(1, 0).scale(-1, 1);
+const FORWARD_TRANSFORM = new Th2.Transform;
+const BACKWARD_TRANSFORM = new Th2.Transform().translate(1, 0).scale(-1, 1);
 
 var canvas = document.getElementById('c');
 var fishImage;
