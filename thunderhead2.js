@@ -41,6 +41,16 @@ Th2 = (function() {
         return n + 1;
     };
 
+    // Resizes a canvas to fit its boundaries.
+    Th2.autoresizeCanvas = function(canvas) {
+        var canvasRect = canvas.getBoundingClientRect();
+        var width = canvasRect.width, height = canvasRect.height;
+        if (canvas.width != width)
+            canvas.width = width;
+        if (canvas.height != height)
+            canvas.height = height;
+    }
+
     // Bare-bones class system, just enough to get more than one level of
     // prototypical inheritance off the ground.
 

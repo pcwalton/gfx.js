@@ -5,7 +5,7 @@
  *	Patrick Walton <pcwalton@mozilla.com>
  */
 
-const FISH_COUNT = 500;
+const FISH_COUNT = 1000;
 const FISH_SWIM_SPEED = 10;
 
 const FORWARD_TRANSFORM = new Th2.Matrix();
@@ -17,7 +17,7 @@ var fishImage;
 function Fish() {
 	var canvasWidth = canvas.width, canvasHeight = canvas.height;
 
-	var size = Math.random() * 0.3;
+	var size = Math.random() * 0.5 - 0.2;
 	var width = (fishImage.width * size) | 0;
 	var height = (fishImage.height * size) | 0;
 
@@ -65,6 +65,9 @@ Fish.prototype = {
 };
 
 function Controller() {
+    Th2.autoresizeCanvas(canvas);
+    $(window).resize(this.onResize.bind(this));
+
 	var rootLayer = new Th2.Layer(canvas);
 
 	var fishes = this.fishes = [];
@@ -86,7 +89,12 @@ Controller.prototype = {
 		for (var i = 0; i < fishes.length; i++)
 			fishes[i].swim();
 		this.renderer.renderSoon();
-	}
+	},
+
+    onResize: function() {
+        console.log("onresize");
+        Th2.autoresizeCanvas(canvas);
+    }
 };
 
 $(function() {
@@ -94,6 +102,5 @@ $(function() {
 	fishImage = new Image();
 	fishImage.onload = function() { new Controller; };
 	fishImage.src = 'fish.png';
-    //fishImage.width = fishImage.height = 256;
 });
 
