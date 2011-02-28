@@ -49,7 +49,7 @@ Th2 = (function() {
     Th2.Matrix.prototype = {
         // Replaces the current matrix with the given matrix.
         copyFrom: function(otherMatrix) {
-            var a = this.array = [];
+            var a = this.array;
             for (var i = 0; i < 16; i++)
                 a[i] = otherMatrix.array[i];
             return this;
@@ -57,24 +57,26 @@ Th2 = (function() {
 
         // Replaces the current matrix with the identity matrix.
         identity: function() {
-            this.array = [
-                1, 0, 0, 0,
-                0, 1, 0, 0,
-                0, 0, 1, 0,
-                0, 0, 0, 1
-            ];
+            this.zero();
+            var a = this.array;
+            a[0] = a[5] = a[10] = a[15] = 1;
             return this;
         },
 
         // Replaces the current matrix with an orthographic projection.
         ortho: function(left, right, bottom, top, near, far) {
+            this.zero();
+
             var rl = right - left, tb = top - bottom, fn = far - near;
-            this.array = [
-                2/rl,               0,                  0,              0,
-                0,                  2/tb,               0,              0,
-                0,                  0,                  -2/fn,          0,
-                -(left+right)/rl,   -(top+bottom)/tb,   -(far+near)/fn, 1
-            ];
+            var a = this.array;
+            a[0] = 2/rl;
+            a[5] = 2/tb;
+            a[10] = -2/fn;
+            a[12] = -(left+right)/rl;
+            a[13] = -(top+bottom)/tb;
+            a[14] = -(far+near)/fn;
+            a[15] = 1;
+
             return this;
         },
 
@@ -95,6 +97,14 @@ Th2 = (function() {
             a[13] += a[1]*x + a[5]*y + a[9];
             a[14] += a[2]*x + a[6]*y + a[10];
             a[15] += a[3]*x + a[7]*y + a[11];
+            return this;
+        },
+
+        // Replaces the current matrix with a zero matrix.
+        zero: function() {
+            var a = this.array;
+            for (var i = 0; i < 16; i++)
+                a[i] = 0;
             return this;
         }
     };
@@ -147,9 +157,16 @@ Th2 = (function() {
 
     const VENDOR_PREFIXES = [ 'moz', 'webkit', 'o', 'ms' ];
 
+    Th2.Renderer = function() {
+        this._renderCallback = this._renderCallback.bind(this);
+    }
+
     Th2.RendererClass = new Th2.Class;
 
     Th2.RendererClass.prototype = {
+        // This horrible thing avoids creating a new closure on every render.
+        _renderCallback: function() { this.render(); },
+
         // Schedules a render operation at the next appropriate opportunity. Use this
         // method whenever you've made a change that doesn't automatically trigger
         // rendering.
@@ -172,8 +189,9 @@ Th2 = (function() {
                     }
                 }
             }
-                
-            window[this.renderSoon._rafName](this.render.bind(this));
+
+            this.self = this;
+            window[this.renderSoon._rafName](this._renderCallback);
         }
     };
 
@@ -215,6 +233,8 @@ void main() {\n\
     ];
 
     Th2.WebGLCanvasRenderer = function(canvas, rootLayer) {
+        Th2.Renderer.call(this);
+
         this.rootLayer = rootLayer;
         this._canvas = canvas;
 
@@ -391,12 +411,12 @@ void main() {\n\
         ctx.bindTexture(ctx.TEXTURE_2D, texture);
         ctx.texImage2D(ctx.TEXTURE_2D, 0, ctx.RGBA, ctx.RGBA, ctx.UNSIGNED_BYTE,
             this.image);
-        ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MAG_FILTER, ctx.NEAREST);
-        ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MIN_FILTER, ctx.NEAREST);
+        ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MAG_FILTER, ctx.LINEAR);
+        ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MIN_FILTER, ctx.LINEAR);
         ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_S, ctx.CLAMP_TO_EDGE);
         ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_T, ctx.CLAMP_TO_EDGE);
 
-        // Create the texture coordinate buffer
+        // Create the texture coordinate buffer.
         var texCoordBuffer = ctx.createBuffer();
         ctx.bindBuffer(ctx.ARRAY_BUFFER, texCoordBuffer);
     }
