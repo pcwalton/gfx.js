@@ -24,7 +24,22 @@ Th2 = (function() {
             console.error(ex + " at " + ex.stack);
             throw ex;
         }
-    }
+    };
+
+    Th2.isPow2 = function(n) { return !(n & (n - 1)); };
+
+    // Fast algorithm from:
+    //
+    //  http://jeffreystedfast.blogspot.com/2008/06/
+    //      calculating-nearest-power-of-2.html
+    Th2.nextPow2 = function(n) {
+        n |= n >> 1;
+        n |= n >> 2;
+        n |= n >> 4;
+        n |= n >> 8;
+        n |= n >> 16;
+        return n + 1;
+    };
 
     // Bare-bones class system, just enough to get more than one level of
     // prototypical inheritance off the ground.
@@ -34,7 +49,7 @@ Th2 = (function() {
             // FIXME: Doesn't work with getters and setters.
             for (var key in subclass)
                 this[key] = subclass[key];
-        }
+        };
     };
 
     // Simple matrix class, based on glMatrix:
@@ -44,7 +59,7 @@ Th2 = (function() {
         this.array = [];
         if (otherMatrix != null)
             this.copyFrom(otherMatrix);
-    }
+    };
 
     Th2.Matrix.prototype = {
         // Replaces the current matrix with the given matrix.
@@ -225,13 +240,6 @@ void main() {\n\
         1, 1, -5
     ];
 
-    const QUAD_TEXTURE_COORDS = [
-        0, 0,
-        1, 0,
-        0, 1,
-        1, 1
-    ];
-
     Th2.WebGLCanvasRenderer = function(canvas, rootLayer) {
         Th2.Renderer.call(this);
 
@@ -305,23 +313,29 @@ void main() {\n\
                 new Float32Array(QUAD_VERTEX_POSITIONS), ctx.STATIC_DRAW);
             ctx.vertexAttribPointer(this._positionLoc, 3, ctx.FLOAT, false, 0,
                 0);
-
-            var texCoordBuffer = this._texCoordBuffer = ctx.createBuffer();
-            ctx.bindBuffer(ctx.ARRAY_BUFFER, texCoordBuffer);
-            ctx.bufferData(ctx.ARRAY_BUFFER,
-                new Float32Array(QUAD_TEXTURE_COORDS), ctx.STATIC_DRAW);
-            ctx.vertexAttribPointer(this._texCoordLoc, 2, ctx.FLOAT, false, 0,
-                0);
         },
 
         // Creates or reuses a texture for the given image.
-        _createImageTexture: function(image) {
-            var cached = this._imageTextureCache[image.src];
-            if (cached) {
-                for (var i = 0; i < cached.length; i++) {
-                    if (cached[i].image === image)
-                        return cached[i].texture;
-                }
+        _createImageTexture: function(image, mipmap) {
+            var key = mipmap + ':' + image.src;
+            if (key in this._imageTextureCache)
+                return this._imageTextureCache[key];
+
+            var width = image.width, height = image.height;
+            var widthScale, heightScale;
+            if (mipmap && (!Th2.isPow2(width) || !Th2.isPow2(height))) {
+                // Resize up to the next power of 2.
+                var canvas2d = document.createElement('canvas');
+                var textureWidth = canvas2d.width = Th2.nextPow2(width);
+                var textureHeight = canvas2d.height = Th2.nextPow2(height);
+                widthScale = width / textureWidth;
+                heightScale = height / textureHeight;
+
+                var ctx2d = canvas2d.getContext('2d');
+                ctx2d.drawImage(image, 0, 0);
+                image = canvas2d;
+            } else {
+                widthScale = heightScale = 1;
             }
 
             var ctx = this._ctx;
@@ -329,20 +343,33 @@ void main() {\n\
             ctx.bindTexture(ctx.TEXTURE_2D, texture);
             ctx.texImage2D(ctx.TEXTURE_2D, 0, ctx.RGBA, ctx.RGBA,
                 ctx.UNSIGNED_BYTE, image);
-            ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MAG_FILTER,
-                ctx.LINEAR);
-            ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MIN_FILTER,
-                ctx.LINEAR);
             ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_S,
                 ctx.CLAMP_TO_EDGE);
             ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_WRAP_T,
                 ctx.CLAMP_TO_EDGE);
+            ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MAG_FILTER,
+                ctx.LINEAR);
 
-            if (!cached)
-                cached = this._imageTextureCache[image.src] = [];
-            cached.push({ image: image, texture: texture });
+            if (mipmap) {
+                ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MIN_FILTER,
+                    ctx.LINEAR_MIPMAP_LINEAR);
+                ctx.generateMipmap(ctx.TEXTURE_2D);
+            } else {
+                ctx.texParameteri(ctx.TEXTURE_2D, ctx.TEXTURE_MIN_FILTER,
+                    ctx.LINEAR);
+            }
 
-            return texture;
+            var textureCoords = this._createTextureCoords(widthScale,
+                heightScale);
+
+            var coordBuffer = ctx.createBuffer();
+            ctx.bindBuffer(ctx.ARRAY_BUFFER, coordBuffer);
+            ctx.bufferData(ctx.ARRAY_BUFFER, textureCoords, ctx.STATIC_DRAW);
+            ctx.vertexAttribPointer(this._texCoordLoc, 2, ctx.FLOAT, false, 0,
+                0);
+
+            return (this._imageTextureCache[key] =
+                { coordBuffer: coordBuffer, texture: texture });
         },
 
         // Creates a vertex or fragment shader.
@@ -358,6 +385,15 @@ void main() {\n\
                 }
             });
             return shader;
+        },
+
+        _createTextureCoords: function(widthScale, heightScale) {
+            return new Float32Array([
+                0,          0,
+                widthScale, 0,
+                0,          heightScale,
+                widthScale, heightScale
+            ]);
         },
 
         _drawQuad: function() {
@@ -436,17 +472,27 @@ void main() {\n\
 
     // Initializes the WebGL portion of an image layer.
     Th2.ImageLayer.prototype.initWebGL = function(renderer, ctx) {
-        if (this._webGL)
+        if (this.webGLTextureInfo)
             return; // already done
 
-        var webGL = this._webGL = {};
-        webGL.texture = renderer._createImageTexture(this.image);
+        var mipmap = this.mipmap;
+        if (mipmap == null) {
+            var image = this.image, bounds = this.bounds;
+            var scale = Math.min(bounds.w / image.width, bounds.h /
+                image.height);
+            mipmap = scale < 0.75;
+        }
+
+        this.webGLTextureInfo = renderer._createImageTexture(this.image,
+            mipmap);
     };
 
     // Renders an image layer via WebGL.
     Th2.ImageLayer.prototype.renderViaWebGL = function(renderer, ctx) {
+        var textureInfo = this.webGLTextureInfo;
+        //ctx.bindBuffer(ctx.ARRAY_BUFFER, textureInfo.coordBuffer);
         ctx.activeTexture(ctx.TEXTURE0);
-        ctx.bindTexture(ctx.TEXTURE_2D, this._webGL.texture);
+        ctx.bindTexture(ctx.TEXTURE_2D, textureInfo.texture);
         renderer._drawQuad();
     };
 

@@ -5,7 +5,7 @@
  *	Patrick Walton <pcwalton@mozilla.com>
  */
 
-const FISH_COUNT = 500;
+const FISH_COUNT = 1000;
 const FISH_SWIM_SPEED = 10;
 
 var canvas = document.getElementById('c');
