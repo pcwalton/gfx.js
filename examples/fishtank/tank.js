@@ -10,9 +10,6 @@ const FISH_SWIM_SPEED = 10;
 const FISH_MAX_SIZE = 0.02;
 const FISH_MIN_SIZE = 0.01;
 
-const FORWARD_TRANSFORM = null;
-const BACKWARD_TRANSFORM = new Th2.Transform().translate(800, 0).scale(-1, 1);
-
 var canvas = document.getElementById('c');
 var fishImage;
 
@@ -61,11 +58,7 @@ Fish.prototype = {
 	},
 
     setTransform: function() {
-        var layer = this.layer;
-        if (this.deltaX < 0)
-            layer.transform = FORWARD_TRANSFORM;
-        else
-            layer.transform = BACKWARD_TRANSFORM;
+        this.layer.flipped = this.layer.deltaX < 0;
     }
 };
 

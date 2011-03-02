@@ -139,13 +139,14 @@ Th2 = (function() {
         },
 
         // Transforms a 3D point by multiplying it by this matrix.
-        transformPoint: function(pt) {
+        transformPoint: function(pt, index) {
+            index = index || 0;
             var a = this.matrix;
-            var sx = pt[0], sy = pt[1], sz = pt[2];
+            var sx = pt[index], sy = pt[index+1], sz = pt[index+2];
             var dx = a[0]*sx + a[4]*sy + a[8]*sz + a[12];
             var dy = a[1]*sx + a[5]*sy + a[9]*sz + a[13];
             var dz = a[2]*sx + a[6]*sy + a[10]*sz + a[14];
-            pt[0] = dx; pt[1] = dy; pt[2] = dz;
+            pt[index] = dx; pt[index+1] = dy; pt[index+2] = dz;
             return pt;
         },
 
@@ -320,8 +321,6 @@ void main() {\n\
         ctx.blendFunc(ctx.SRC_ALPHA, ctx.ONE_MINUS_SRC_ALPHA);
 
         this._buildVertexBuffers();
-
-        this._matrix = new Th2.Transform;
     };
 
     Th2.WebGLCanvasRenderer.prototype = new Th2.RendererClass({
@@ -443,34 +442,39 @@ void main() {\n\
             });
         },
 
-        // Writes quad coordinates given by @bounds and @z into @buffer
-        // starting at @index.
-        _createQuadCoords: function(buffer, index, z, bounds) {
-            var fn = this._createQuadCoords;
-
-            if (!fn.pts)
-                fn.pts = [ [], [], [], [], [], [] ];
-
+        // Writes quad coordinates given by @bounds and @z into @pts starting
+        // at index @n. If @flipped is true, flips the coordinates
+        // left-to-right (this is basically only useful for the fish tank demo,
+        // sadly).
+        _createQuadCoords: function(pts, n, z, bounds, flipped) {
             var x1 = bounds.x, y1 = bounds.y;
             var x2 = x1 + bounds.w, y2 = y1 + bounds.h;
 
-            var pts = fn.pts;
-            pts[0][0] = pts[1][0] = pts[4][0] = x1;
-            pts[0][1] = pts[2][1] = pts[3][1] = y1;
-            pts[2][0] = pts[3][0] = pts[5][0] = x2;
-            pts[1][1] = pts[4][1] = pts[5][1] = y2;
-
-            for (var i = 0; i < 6; i++) {
-                var pt = pts[i];
-                pt[2] = z;
-
-                this._matrix.transformPoint(pt);
+            if (flipped) {
+                var tmp = x2;
+                x2 = x1;
+                x1 = tmp;
             }
 
-            for (i = 0; i < 6; i++) {
+            pts[n + 0*3 + 0] = pts[n + 1*3 + 0] = pts[n + 4*3 + 0] = x1;
+            pts[n + 0*3 + 1] = pts[n + 2*3 + 1] = pts[n + 3*3 + 1] = y1;
+            pts[n + 2*3 + 0] = pts[n + 3*3 + 0] = pts[n + 5*3 + 0] = x2;
+            pts[n + 1*3 + 1] = pts[n + 4*3 + 1] = pts[n + 5*3 + 1] = y2;
+
+            for (var i = 0; i < 18; i += 3) {
+                pts[n + i + 2] = z;
+
+                if (this._matrix)
+                    this._matrix.transformPoint(pts, i);
+
+                //console.log("resulting points: " + pts.toSource());
+                //throw new Error("x");
+            }
+
+            /*for (i = 0; i < 6; i++) {
                 for (var j = 0; j < 3; j++)
                     buffer[index + i*3 + j] = pts[i][j];
-            }
+            }*/
         },
 
         // Creates a vertex or fragment shader.
@@ -518,7 +522,21 @@ void main() {\n\
             if ('initWebGL' in layer)
                 layer.initWebGL(this, this._ctx);
 
+            // If this layer has a transform, apply it and save the old matrix.
+            var matrixStack = this._matrixStack;
             if (layer.transform) {
+                // We use a stack of matrices to avoid generating garbage.
+
+                if (matrixStack[matrixStack.size]) {
+                    var oldMatrix = matrixStack[matrixStack.size++];
+                    oldMatrix.copyFrom(this._matrix);
+                } else {
+                    oldMatrix = new Th2.Transform(transform);
+                    matrixStack.push(oldMatrix);
+                    matrixStack.size++;
+                }
+
+                this._matrix = layer.transform;
             }
 
             if (layer.webGLTextureInfo) {
@@ -532,7 +550,7 @@ void main() {\n\
 
                 var index = this._allocBuffer(POSITION_BUFFER, 6*3);
                 this._createQuadCoords(this._positionBufferData, index, -5,
-                    layer.bounds);
+                    layer.bounds, layer.flipped);
                 this._positionBufferIndex += 6*3;
 
                 /*index = this._allocBuffer(TEX_COORD_BUFFER, 6*2);
@@ -543,34 +561,13 @@ void main() {\n\
                 // TODO: flush
             }
 
-            // Save the old matrix. We use a fixed stack of matrices per
-            // renderer to avoid accumulating garbage.
-            var oldMatrix;
-            var matrixStack = this._matrixStack;
-            if (matrixStack[matrixStack.size]) {
-                oldMatrix = matrixStack[matrixStack.size++];
-                oldMatrix.copyFrom(this._matrix);
-            } else {
-                oldMatrix = new Th2.Transform(this._matrix);
-                matrixStack.push(oldMatrix);
-                matrixStack.size++;
-            }
-
             var children = layer.children;
-            for (var i = 0; i < children.length; i++) {
-                var child = children[i];
+            for (var i = 0; i < children.length; i++)
+                this._renderLayer(children[i]);
 
-                this._matrix.copyFrom(oldMatrix);
-
-                // Apply the child's transform.
-                if (child.transform)
-                    this._matrix.combine(child.transform);
-
-                this._renderLayer(child);
-            }
-
-            this._matrix.copyFrom(oldMatrix);
-            matrixStack.size--;
+            // Restore the old matrix.
+            if (layer.transform)
+                this._matrix = matrixStack[--matrixStack.size];
         },
 
         // Renders the layer tree.
@@ -588,8 +585,6 @@ void main() {\n\
 
             ctx.viewport(0, 0, width, height);
             ctx.clear(ctx.COLOR_BUFFER_BIT);
-
-            this._matrix.identity();
 
             this._renderLayer(this.rootLayer);
 
