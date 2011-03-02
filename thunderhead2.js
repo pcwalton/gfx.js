@@ -137,6 +137,17 @@ Th2 = (function() {
             return this;
         },
 
+        // Transforms a 3D point by multiplying it by this matrix.
+        transformPoint: function(pt) {
+            var a = this.matrix;
+            var sx = pt[0], sy = pt[1], sz = pt[2];
+            var dx = a[0]*sx + a[4]*sy + a[8]*sz + a[12];
+            var dy = a[1]*sx + a[5]*sy + a[9]*sz + a[13];
+            var dz = a[2]*sx + a[6]*sy + a[10]*sz + a[14];
+            pt[0] = dx; pt[1] = dy; pt[2] = dz;
+            return pt;
+        },
+
         // Translates the current transform by the given 2D coordinate.
         translate: function(x, y) {
             var a = this.matrix;
@@ -245,13 +256,12 @@ Th2 = (function() {
     // The WebGL canvas renderer
 
     const VERTEX_SHADER = "\n\
-uniform mat4 transformMatrix;\n\
 uniform mat4 mvpMatrix;\n\
 attribute vec4 texCoord;\n\
 attribute vec4 position;\n\
 varying vec2 texCoord2;\n\
 void main() {\n\
-    gl_Position = mvpMatrix * transformMatrix * position;\n\
+    gl_Position = mvpMatrix * position;\n\
     texCoord2 = texCoord.st;\n\
 }\n\
 ";
@@ -265,12 +275,15 @@ void main() {\n\
 }\n\
 ";
 
-    const QUAD_VERTEX_POSITIONS = [
-        0, 0, -5,
-        1, 0, -5,
-        0, 1, -5,
-        1, 1, -5
-    ];
+    const POSITION_BUFFER = {
+        data: '_positionBufferData',
+        index: '_positionBufferIndex'
+    };
+
+    const TEX_COORD_BUFFER = {
+        data: '_texCoordBufferData',
+        index: '_texCoordBufferIndex'
+    };
 
     Th2.WebGLCanvasRenderer = function(canvas, rootLayer) {
         Th2.Renderer.call(this);
@@ -307,10 +320,29 @@ void main() {\n\
         this._buildVertexBuffers();
 
         this._matrix = new Th2.Transform;
-        this._reloadMatrix();
     };
 
     Th2.WebGLCanvasRenderer.prototype = new Th2.RendererClass({
+        // Allocates space for @count values in one of the buffers
+        // (POSITION_BUFFER or TEX_COORD_BUFFER), resizing the buffer if
+        // necessary.
+        _allocBuffer: function(bufferType, count) {
+            var data = this[bufferType.data];
+            var index = this[bufferType.index];
+
+            if (data.length >= index + count)
+                return index;
+
+            // Scale up by a power of two.
+            var newLength = Th2.nextPow2(index + count);
+            var newData = new Float32Array(newLength);
+            for (var i = 0; i < data.length; i++)
+                newData[i] = data[i];
+            this[bufferType.data] = newData;
+
+            return index;
+        },
+
         // Builds the shaders and the program.
         _buildShaders: function() {
             var ctx = this._ctx;
@@ -341,10 +373,19 @@ void main() {\n\
 
             var positionBuffer = this._positionBuffer = ctx.createBuffer();
             ctx.bindBuffer(ctx.ARRAY_BUFFER, positionBuffer);
-            ctx.bufferData(ctx.ARRAY_BUFFER,
-                new Float32Array(QUAD_VERTEX_POSITIONS), ctx.STATIC_DRAW);
             ctx.vertexAttribPointer(this._positionLoc, 3, ctx.FLOAT, false, 0,
                 0);
+
+            this._positionBufferData = new Float32Array(16);
+            this._positionBufferIndex = 0;
+
+            var texCoordBuffer = this._texCoordBuffer = ctx.createBuffer();
+            ctx.bindBuffer(ctx.ARRAY_BUFFER, texCoordBuffer);
+            ctx.vertexAttribPointer(this._texCoordLoc, 2, ctx.FLOAT, false, 0,
+                0);
+
+            this._texCoordBufferData = new Float32Array(16);
+            this._texCoordBufferIndex = 0;
         },
 
         // Creates or reuses a texture for the given image.
@@ -391,17 +432,40 @@ void main() {\n\
                     ctx.LINEAR);
             }
 
-            var textureCoords = this._createTextureCoords(widthScale,
-                heightScale);
+            return (this._imageTextureCache[key] = {
+                texture: texture,
+                widthScale: widthScale,
+                heightScale: heightScale
+            });
+        },
 
-            var coordBuffer = ctx.createBuffer();
-            ctx.bindBuffer(ctx.ARRAY_BUFFER, coordBuffer);
-            ctx.bufferData(ctx.ARRAY_BUFFER, textureCoords, ctx.STATIC_DRAW);
-            ctx.vertexAttribPointer(this._texCoordLoc, 2, ctx.FLOAT, false, 0,
-                0);
+        // Writes the quad coordinates [ (0,0,@z), (0,1,@z), (1,0,@z),
+        // (1,0,@z), (0,1,@z), (1,1,@z) ] into @buffer starting at @index,
+        // transformed by the current matrix.
+        _createQuadCoords: function(buffer, index, z) {
+            var fn = this._createQuadCoords;
 
-            return (this._imageTextureCache[key] =
-                { coordBuffer: coordBuffer, texture: texture });
+            if (!fn.pts)
+                fn.pts = [ [], [], [], [], [], [] ];
+
+            var pts = fn.pts;
+            pts[0][0] = pts[0][1] = pts[1][0] = pts[2][1] = pts[3][1] =
+                pts[4][0] = 0;
+            pts[1][1] = pts[2][0] = pts[3][0] = pts[4][1] = pts[5][0] =
+                pts[5][1] = 1;
+
+            for (var i = 0; i < 6; i++) {
+                var pt = pts[i];
+                pt[2] = z;
+                this._matrix.transformPoint(pt);
+                /*pt[0] *= 100;
+                pt[1] *= 100;*/
+            }
+
+            for (i = 0; i < 6; i++) {
+                for (var j = 0; j < 3; j++)
+                    buffer[index + i*3 + j] = pts[i][j];
+            }
         },
 
         // Creates a vertex or fragment shader.
@@ -419,32 +483,56 @@ void main() {\n\
             return shader;
         },
 
-        _createTextureCoords: function(widthScale, heightScale) {
-            return new Float32Array([
-                0,          0,
-                widthScale, 0,
-                0,          heightScale,
-                widthScale, heightScale
-            ]);
+        // Writes the texture coordinates [ (0,0), (0,@h), (@w,0), (@w,0),
+        // (0,@h), (@w,@h) ] into @buf starting at @i.
+        _createTextureCoords:
+        function(buf, i, w, h) {
+            buf[i] = buf[i+1] = buf[i+2] = buf[i+5] = buf[i+7] = buf[i+8] = 0;
+            buf[i+4] = buf[i+6] = buf[i+10] = w;
+            buf[i+3] = buf[i+9] = buf[i+11] = h;
         },
 
-        _drawQuad: function() {
+        // Sends the commands to the graphics card and flushes the buffers.
+        _flush: function() {
             var ctx = this._ctx;
-            ctx.drawArrays(ctx.TRIANGLE_STRIP, 0, 4);
-        },
+            ctx.bindBuffer(ctx.ARRAY_BUFFER, this._positionBuffer);
+            ctx.bufferData(ctx.ARRAY_BUFFER, this._positionBufferData,
+                ctx.STATIC_DRAW);
+            ctx.bindBuffer(ctx.ARRAY_BUFFER, this._texCoordBuffer);
+            ctx.bufferData(ctx.ARRAY_BUFFER, this._texCoordBufferData,
+                ctx.STATIC_DRAW);
 
-        // Sets the OpenGL matrix (our vertex shader's matrix, really) to the
-        // value of @_matrix.
-        _reloadMatrix: function() {
-            this._ctx.uniformMatrix4fv(this._transformMatrixLoc, false,
-                this._matrix.matrix);
+            // TODO: drawElements (indexed) is faster.
+            var objectCount = this._positionBufferIndex / 3;
+            ctx.drawArrays(ctx.TRIANGLES, 0, objectCount);
+
+            this._positionBufferIndex = this._texCoordBufferIndex = 0;
         },
 
         _renderLayer: function(layer) {
             if ('initWebGL' in layer)
                 layer.initWebGL(this, this._ctx);
-            if ('renderViaWebGL' in layer)
-                layer.renderViaWebGL(this, this._ctx);
+
+            if (layer.webGLTextureInfo) {
+                // Add the appropriate position and texture coordinates to the
+                // buffers we're building up.
+
+                var textureInfo = layer.webGLTextureInfo;
+
+                // TODO: we shouldn't be doing _allocBuffer here; delegate to
+                // the _createFooCoords() methods.
+
+                var index = this._allocBuffer(POSITION_BUFFER, 6*3);
+                this._createQuadCoords(this._positionBufferData, index, -5);
+                this._positionBufferIndex += 6*3;
+
+                index = this._allocBuffer(TEX_COORD_BUFFER, 6*2);
+                this._createTextureCoords(this._texCoordBufferData, index,
+                    textureInfo.widthScale, textureInfo.heightScale);
+                this._texCoordBufferIndex += 6*2;
+            } else {
+                // TODO: flush
+            }
 
             // Save the old matrix. We use a fixed stack of matrices per
             // renderer to avoid accumulating garbage.
@@ -473,8 +561,6 @@ void main() {\n\
                 if (child.transform)
                     matrix.combine(child.transform);
 
-                this._reloadMatrix();
-
                 this._renderLayer(child);
             }
 
@@ -499,9 +585,10 @@ void main() {\n\
             ctx.clear(ctx.COLOR_BUFFER_BIT);
 
             this._matrix.identity();
-            this._reloadMatrix();
 
             this._renderLayer(this.rootLayer);
+
+            this._flush();
         }
     });
 
@@ -524,14 +611,12 @@ void main() {\n\
             mipmap);
     };
 
-    // Renders an image layer via WebGL.
-    Th2.ImageLayer.prototype.renderViaWebGL = function(renderer, ctx) {
-        var textureInfo = this.webGLTextureInfo;
-        ctx.bindBuffer(ctx.ARRAY_BUFFER, textureInfo.coordBuffer);
-        ctx.activeTexture(ctx.TEXTURE0);
-        ctx.bindTexture(ctx.TEXTURE_2D, textureInfo.texture);
-        renderer._drawQuad();
-    };
+    /*
+     *  DOM renderer
+     */
+
+    Th2.DOMRenderer = function() {
+    }
 
     return Th2;
 })();

@@ -92,7 +92,6 @@ Controller.prototype = {
 	},
 
     onResize: function() {
-        console.log("onresize");
         Th2.autoresizeCanvas(canvas);
     }
 };
