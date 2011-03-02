@@ -7,17 +7,22 @@
 
 const FISH_COUNT = 2000;
 const FISH_SWIM_SPEED = 10;
+const FISH_MAX_SIZE = 0.02;
+const FISH_MIN_SIZE = 0.01;
 
-const FORWARD_TRANSFORM = new Th2.Transform;
-const BACKWARD_TRANSFORM = new Th2.Transform().translate(1, 0).scale(-1, 1);
+const FORWARD_TRANSFORM = null;
+const BACKWARD_TRANSFORM = new Th2.Transform().translate(800, 0).scale(-1, 1);
 
 var canvas = document.getElementById('c');
 var fishImage;
 
+var frameCount = 0;
+var frameStart = new Date().getTime();
+
 function Fish() {
 	var canvasWidth = canvas.width, canvasHeight = canvas.height;
 
-	var size = Math.random() * 0.5 - 0.2;
+	var size = Math.random() * (FISH_MAX_SIZE - FISH_MIN_SIZE) + FISH_MIN_SIZE;
 	var width = (fishImage.width * size) | 0;
 	var height = (fishImage.height * size) | 0;
 
@@ -85,6 +90,13 @@ function Controller() {
 
 Controller.prototype = {
 	onRender: function() {
+        frameCount++;
+        if (new Date().getTime() >= frameStart + 1000) {
+            console.log("fps " + frameCount);
+            frameStart = new Date().getTime();
+            frameCount = 0;
+        }
+
 		var fishes = this.fishes;
 		for (var i = 0; i < fishes.length; i++)
 			fishes[i].swim();

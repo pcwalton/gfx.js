@@ -17,7 +17,7 @@ Th2 = (function() {
     Th2.assert = function(cond, msg) {
         if (cond)
             return;
-        
+
         try {
             throw new Error("Thunderhead2 assertion failed: " + msg);
         } catch (ex) {
@@ -79,17 +79,33 @@ Th2 = (function() {
         // matrix on the left.
         combine: function(otherTransform) {
             var a = this.matrix, b = otherTransform.matrix, c = this._scratch;
-            for (var i = 0; i < 4; i++) {
-                for (var j = 0; j < 4; j++) {
-                    var acc = 0;
-                    for (k = 0; k < 4; k++)
-                        acc += b[i*4 + k] * a[k*4 + j];
-                    c[i*4 + j] = acc;
-                }
-            }
 
-            for (i = 0; i < 16; i++)
-                a[i] = c[i];
+            var a00 = a[0],  a01 = a[1],  a02 = a[2],  a03 = a[3];
+            var a10 = a[4],  a11 = a[5],  a12 = a[6],  a13 = a[7];
+            var a20 = a[8],  a21 = a[9],  a22 = a[10], a23 = a[11];
+            var a30 = a[12], a31 = a[13], a32 = a[14], a33 = a[15];
+
+            var b00 = b[0],  b01 = b[1],  b02 = b[2],  b03 = b[3];
+            var b10 = b[4],  b11 = b[5],  b12 = b[6],  b13 = b[7];
+            var b20 = b[8],  b21 = b[9],  b22 = b[10], b23 = b[11];
+            var b30 = b[12], b31 = b[13], b32 = b[14], b33 = b[15];
+
+            a[0]  = b00*a00 + b01*a10 + b02*a20 + b03*a30;
+            a[1]  = b00*a01 + b01*a11 + b02*a21 + b03*a31;
+            a[2]  = b00*a02 + b01*a12 + b02*a22 + b03*a32;
+            a[3]  = b00*a03 + b01*a13 + b02*a23 + b03*a33;
+            a[4]  = b10*a00 + b11*a10 + b12*a20 + b13*a30;
+            a[5]  = b10*a01 + b11*a11 + b12*a21 + b13*a31;
+            a[6]  = b10*a02 + b11*a12 + b12*a22 + b13*a32;
+            a[7]  = b10*a03 + b11*a13 + b12*a23 + b13*a33;
+            a[8]  = b20*a00 + b21*a10 + b22*a20 + b23*a30;
+            a[9]  = b20*a01 + b21*a11 + b22*a21 + b23*a31;
+            a[10] = b20*a02 + b21*a12 + b22*a22 + b23*a32;
+            a[11] = b20*a03 + b21*a13 + b22*a23 + b23*a33;
+            a[12] = b30*a00 + b31*a10 + b32*a20 + b33*a30;
+            a[13] = b30*a01 + b31*a11 + b32*a21 + b33*a31;
+            a[14] = b30*a02 + b31*a12 + b32*a22 + b33*a32;
+            a[15] = b30*a03 + b31*a13 + b32*a23 + b33*a33;
 
             return this;
         },
@@ -257,21 +273,22 @@ Th2 = (function() {
 
     const VERTEX_SHADER = "\n\
 uniform mat4 mvpMatrix;\n\
-attribute vec2 texCoord;\n\
+//attribute vec2 texCoord;\n\
 attribute vec4 position;\n\
 varying vec2 texCoord2;\n\
 void main() {\n\
     gl_Position = mvpMatrix * position;\n\
-    texCoord2 = texCoord;\n\
+    //texCoord2 = texCoord;\n\
 }\n\
 ";
 
     const FRAGMENT_SHADER = "\n\
 precision highp float;\n\
-uniform sampler2D sampler2d;\n\
+//uniform sampler2D sampler2d;\n\
 varying vec2 texCoord2;\n\
 void main() {\n\
-    gl_FragColor = texture2D(sampler2d, texCoord2);\n\
+    //gl_FragColor = texture2D(sampler2d, texCoord2);\n\
+    gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);\n\
 }\n\
 ";
 
@@ -308,9 +325,9 @@ void main() {\n\
             'transformMatrix');
         this._mvpMatrixLoc = ctx.getUniformLocation(program, 'mvpMatrix');
         this._positionLoc = ctx.getAttribLocation(program, 'position');
-        this._texCoordLoc = ctx.getAttribLocation(program, 'texCoord');
+        //this._texCoordLoc = ctx.getAttribLocation(program, 'texCoord');
         ctx.enableVertexAttribArray(this._positionLoc);
-        ctx.enableVertexAttribArray(this._texCoordLoc);
+        //ctx.enableVertexAttribArray(this._texCoordLoc);
 
         ctx.clearColor(0, 0, 0, 1);
 
@@ -379,13 +396,13 @@ void main() {\n\
             this._positionBufferData = new Float32Array(16);
             this._positionBufferIndex = 0;
 
-            var texCoordBuffer = this._texCoordBuffer = ctx.createBuffer();
+            /*var texCoordBuffer = this._texCoordBuffer = ctx.createBuffer();
             ctx.bindBuffer(ctx.ARRAY_BUFFER, texCoordBuffer);
             ctx.vertexAttribPointer(this._texCoordLoc, 2, ctx.FLOAT, false, 0,
                 0);
 
             this._texCoordBufferData = new Float32Array(16);
-            this._texCoordBufferIndex = 0;
+            this._texCoordBufferIndex = 0;*/
         },
 
         // Creates or reuses a texture for the given image.
@@ -407,6 +424,8 @@ void main() {\n\
                 var ctx2d = canvas2d.getContext('2d');
                 ctx2d.drawImage(image, 0, 0);
                 image = canvas2d;
+
+                console.log("size: " + textureWidth + " / " + textureHeight);
             } else {
                 widthScale = heightScale = 1;
             }
@@ -439,27 +458,28 @@ void main() {\n\
             });
         },
 
-        // Writes the quad coordinates [ (0,0,@z), (0,1,@z), (1,0,@z),
-        // (1,0,@z), (0,1,@z), (1,1,@z) ] into @buffer starting at @index,
-        // transformed by the current matrix.
-        _createQuadCoords: function(buffer, index, z) {
+        // Writes quad coordinates given by @bounds and @z into @buffer
+        // starting at @index.
+        _createQuadCoords: function(buffer, index, z, bounds) {
             var fn = this._createQuadCoords;
 
             if (!fn.pts)
                 fn.pts = [ [], [], [], [], [], [] ];
 
+            var x1 = bounds.x, y1 = bounds.y;
+            var x2 = x1 + bounds.w, y2 = y1 + bounds.h;
+
             var pts = fn.pts;
-            pts[0][0] = pts[0][1] = pts[1][0] = pts[2][1] = pts[3][1] =
-                pts[4][0] = 0;
-            pts[1][1] = pts[2][0] = pts[3][0] = pts[4][1] = pts[5][0] =
-                pts[5][1] = 1;
+            pts[0][0] = pts[1][0] = pts[4][0] = x1;
+            pts[0][1] = pts[2][1] = pts[3][1] = y1;
+            pts[2][0] = pts[3][0] = pts[5][0] = x2;
+            pts[1][1] = pts[4][1] = pts[5][1] = y2;
 
             for (var i = 0; i < 6; i++) {
                 var pt = pts[i];
                 pt[2] = z;
+
                 this._matrix.transformPoint(pt);
-                /*pt[0] *= 100;
-                pt[1] *= 100;*/
             }
 
             for (i = 0; i < 6; i++) {
@@ -497,10 +517,10 @@ void main() {\n\
             var ctx = this._ctx;
             ctx.bindBuffer(ctx.ARRAY_BUFFER, this._positionBuffer);
             ctx.bufferData(ctx.ARRAY_BUFFER, this._positionBufferData,
-                ctx.STATIC_DRAW);
-            ctx.bindBuffer(ctx.ARRAY_BUFFER, this._texCoordBuffer);
+                ctx.STREAM_DRAW);
+            /*ctx.bindBuffer(ctx.ARRAY_BUFFER, this._texCoordBuffer);
             ctx.bufferData(ctx.ARRAY_BUFFER, this._texCoordBufferData,
-                ctx.STATIC_DRAW);
+                ctx.STREAM_DRAW);*/
 
             // TODO: drawElements (indexed) is faster.
             var objectCount = this._positionBufferIndex / 3;
@@ -513,6 +533,9 @@ void main() {\n\
             if ('initWebGL' in layer)
                 layer.initWebGL(this, this._ctx);
 
+            if (layer.transform) {
+            }
+
             if (layer.webGLTextureInfo) {
                 // Add the appropriate position and texture coordinates to the
                 // buffers we're building up.
@@ -523,13 +546,14 @@ void main() {\n\
                 // the _createFooCoords() methods.
 
                 var index = this._allocBuffer(POSITION_BUFFER, 6*3);
-                this._createQuadCoords(this._positionBufferData, index, -5);
+                this._createQuadCoords(this._positionBufferData, index, -5,
+                    layer.bounds);
                 this._positionBufferIndex += 6*3;
 
-                index = this._allocBuffer(TEX_COORD_BUFFER, 6*2);
+                /*index = this._allocBuffer(TEX_COORD_BUFFER, 6*2);
                 this._createTextureCoords(this._texCoordBufferData, index,
                     textureInfo.widthScale, textureInfo.heightScale);
-                this._texCoordBufferIndex += 6*2;
+                this._texCoordBufferIndex += 6*2;*/
             } else {
                 // TODO: flush
             }
@@ -551,15 +575,11 @@ void main() {\n\
             for (var i = 0; i < children.length; i++) {
                 var child = children[i];
 
-                // Transform to the child's bounding rect.
-                var matrix = this._matrix.copyFrom(oldMatrix);
-                var bounds = child.bounds;
-                matrix.translate(bounds.x, bounds.y);
-                matrix.scale(bounds.w, bounds.h);
+                this._matrix.copyFrom(oldMatrix);
 
                 // Apply the child's transform.
                 if (child.transform)
-                    matrix.combine(child.transform);
+                    this._matrix.combine(child.transform);
 
                 this._renderLayer(child);
             }
