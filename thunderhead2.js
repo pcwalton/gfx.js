@@ -259,22 +259,21 @@ Th2 = (function() {
 
     const VERTEX_SHADER = "\n\
 uniform mat4 mvpMatrix;\n\
-//attribute vec2 texCoord;\n\
+attribute vec2 texCoord;\n\
 attribute vec4 position;\n\
 varying vec2 texCoord2;\n\
 void main() {\n\
     gl_Position = mvpMatrix * position;\n\
-    //texCoord2 = texCoord;\n\
+    texCoord2 = texCoord;\n\
 }\n\
 ";
 
     const FRAGMENT_SHADER = "\n\
 precision highp float;\n\
-//uniform sampler2D sampler2d;\n\
+uniform sampler2D sampler2d;\n\
 varying vec2 texCoord2;\n\
 void main() {\n\
-    //gl_FragColor = texture2D(sampler2d, texCoord2);\n\
-    gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);\n\
+    gl_FragColor = texture2D(sampler2d, texCoord2);\n\
 }\n\
 ";
 
@@ -311,9 +310,9 @@ void main() {\n\
             'transformMatrix');
         this._mvpMatrixLoc = ctx.getUniformLocation(program, 'mvpMatrix');
         this._positionLoc = ctx.getAttribLocation(program, 'position');
-        //this._texCoordLoc = ctx.getAttribLocation(program, 'texCoord');
+        this._texCoordLoc = ctx.getAttribLocation(program, 'texCoord');
         ctx.enableVertexAttribArray(this._positionLoc);
-        //ctx.enableVertexAttribArray(this._texCoordLoc);
+        ctx.enableVertexAttribArray(this._texCoordLoc);
 
         ctx.clearColor(0, 0, 0, 1);
 
@@ -380,13 +379,13 @@ void main() {\n\
             this._positionBufferData = new Float32Array(16);
             this._positionBufferIndex = 0;
 
-            /*var texCoordBuffer = this._texCoordBuffer = ctx.createBuffer();
+            var texCoordBuffer = this._texCoordBuffer = ctx.createBuffer();
             ctx.bindBuffer(ctx.ARRAY_BUFFER, texCoordBuffer);
             ctx.vertexAttribPointer(this._texCoordLoc, 2, ctx.FLOAT, false, 0,
                 0);
 
             this._texCoordBufferData = new Float32Array(16);
-            this._texCoordBufferIndex = 0;*/
+            this._texCoordBufferIndex = 0;
         },
 
         // Creates or reuses a texture for the given image.
@@ -466,15 +465,7 @@ void main() {\n\
 
                 if (this._matrix)
                     this._matrix.transformPoint(pts, i);
-
-                //console.log("resulting points: " + pts.toSource());
-                //throw new Error("x");
             }
-
-            /*for (i = 0; i < 6; i++) {
-                for (var j = 0; j < 3; j++)
-                    buffer[index + i*3 + j] = pts[i][j];
-            }*/
         },
 
         // Creates a vertex or fragment shader.
@@ -507,9 +498,9 @@ void main() {\n\
             ctx.bindBuffer(ctx.ARRAY_BUFFER, this._positionBuffer);
             ctx.bufferData(ctx.ARRAY_BUFFER, this._positionBufferData,
                 ctx.STREAM_DRAW);
-            /*ctx.bindBuffer(ctx.ARRAY_BUFFER, this._texCoordBuffer);
+            ctx.bindBuffer(ctx.ARRAY_BUFFER, this._texCoordBuffer);
             ctx.bufferData(ctx.ARRAY_BUFFER, this._texCoordBufferData,
-                ctx.STREAM_DRAW);*/
+                ctx.STREAM_DRAW);
 
             // TODO: drawElements (indexed) is faster.
             var objectCount = this._positionBufferIndex / 3;
@@ -553,10 +544,10 @@ void main() {\n\
                     layer.bounds, layer.flipped);
                 this._positionBufferIndex += 6*3;
 
-                /*index = this._allocBuffer(TEX_COORD_BUFFER, 6*2);
+                index = this._allocBuffer(TEX_COORD_BUFFER, 6*2);
                 this._createTextureCoords(this._texCoordBufferData, index,
                     textureInfo.widthScale, textureInfo.heightScale);
-                this._texCoordBufferIndex += 6*2;*/
+                this._texCoordBufferIndex += 6*2;
             } else {
                 // TODO: flush
             }

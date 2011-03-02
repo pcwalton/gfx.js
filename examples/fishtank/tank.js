@@ -5,10 +5,10 @@
  *	Patrick Walton <pcwalton@mozilla.com>
  */
 
-const FISH_COUNT = 2000;
+const FISH_COUNT = 10000;
 const FISH_SWIM_SPEED = 10;
-const FISH_MAX_SIZE = 0.02;
-const FISH_MIN_SIZE = 0.01;
+const FISH_MAX_SIZE = 0.1;
+const FISH_MIN_SIZE = 0.05;
 
 var canvas = document.getElementById('c');
 var fishImage;
@@ -30,7 +30,7 @@ function Fish() {
 	this.deltaX = (Math.random() - 0.5) * FISH_SWIM_SPEED;
 	this.deltaY = (Math.random() - 0.5) * FISH_SWIM_SPEED;
 
-    this.setTransform();
+    this.layer.flipped = this.deltaX < 0;
 }
 
 Fish.prototype = {
@@ -49,17 +49,13 @@ Fish.prototype = {
                 (y > canvasHeight - h && this.deltaY > 0))
 			this.deltaY = -this.deltaY;
 
+        this.layer.flipped = this.deltaX < 0;
+
 		bounds.x = x;
 		bounds.y = y;
 		bounds.w = w;
 		bounds.h = h;
-
-        this.setTransform();
-	},
-
-    setTransform: function() {
-        this.layer.flipped = this.layer.deltaX < 0;
-    }
+	}
 };
 
 function Controller() {
@@ -83,12 +79,12 @@ function Controller() {
 
 Controller.prototype = {
 	onRender: function() {
-        frameCount++;
+        /*frameCount++;
         if (new Date().getTime() >= frameStart + 1000) {
             console.log("fps " + frameCount);
             frameStart = new Date().getTime();
             frameCount = 0;
-        }
+        }*/
 
 		var fishes = this.fishes;
 		for (var i = 0; i < fishes.length; i++)
