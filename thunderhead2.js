@@ -257,12 +257,12 @@ Th2 = (function() {
 
     const VERTEX_SHADER = "\n\
 uniform mat4 mvpMatrix;\n\
-attribute vec4 texCoord;\n\
+attribute vec2 texCoord;\n\
 attribute vec4 position;\n\
 varying vec2 texCoord2;\n\
 void main() {\n\
     gl_Position = mvpMatrix * position;\n\
-    texCoord2 = texCoord.st;\n\
+    texCoord2 = texCoord;\n\
 }\n\
 ";
 
