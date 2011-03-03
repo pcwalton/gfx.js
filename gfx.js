@@ -510,8 +510,9 @@ void main() {\n\
         },
 
         _renderLayer: function(layer) {
+            var ctx = this._ctx;
             if ('initWebGL' in layer)
-                layer.initWebGL(this, this._ctx);
+                layer.initWebGL(this, ctx);
 
             // If this layer has a transform, apply it and save the old matrix.
             var matrixStack = this._matrixStack;
@@ -531,10 +532,18 @@ void main() {\n\
             }
 
             if (layer.webGLTextureInfo) {
+                var textureInfo = layer.webGLTextureInfo;
+                if (this._currentTextureInfo && this._currentTextureInfo !==
+                        textureInfo)
+                    this._flush();
+
+                if (this._currentTextureInfo !== textureInfo) {
+                    this._currentTextureInfo = textureInfo;
+                    ctx.bindTexture(ctx.TEXTURE_2D, textureInfo.texture);
+                }
+
                 // Add the appropriate position and texture coordinates to the
                 // buffers we're building up.
-
-                var textureInfo = layer.webGLTextureInfo;
 
                 // TODO: we shouldn't be doing _allocBuffer here; delegate to
                 // the _createFooCoords() methods.
@@ -548,8 +557,6 @@ void main() {\n\
                 this._createTextureCoords(this._texCoordBufferData, index,
                     textureInfo.widthScale, textureInfo.heightScale);
                 this._texCoordBufferIndex += 6*2;
-            } else {
-                // TODO: flush
             }
 
             var children = layer.children;

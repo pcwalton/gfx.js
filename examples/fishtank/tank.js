@@ -10,8 +10,8 @@ const FISH_SWIM_SPEED = 10;
 const FISH_MAX_SIZE = 0.1;
 const FISH_MIN_SIZE = 0.05;
 
-var canvas = document.getElementById('c');
-var fishImage;
+var canvas;
+var backgroundImage, fishImage;
 
 var frameCount = 0;
 var frameStart = new Date().getTime();
@@ -64,6 +64,11 @@ function Controller() {
 
     var rootLayer = new GFX.Layer(canvas);
 
+    var backgroundLayer = this.backgroundLayer =
+        new GFX.ImageLayer(backgroundImage);
+    this.resizeBackgroundLayer();
+    rootLayer.children.push(backgroundLayer);
+
     var fishes = this.fishes = [];
     for (var i = 0; i < FISH_COUNT; i++) {
         var fish = new Fish;
@@ -86,6 +91,8 @@ Controller.prototype = {
             frameCount = 0;
         }*/
 
+        this.resizeBackgroundLayer();
+
         var fishes = this.fishes;
         for (var i = 0; i < fishes.length; i++)
             fishes[i].swim();
@@ -94,13 +101,31 @@ Controller.prototype = {
 
     onResize: function() {
         GFX.autoresizeCanvas(canvas);
+    },
+
+    // TODO: maybe we should have a kind of layout manager for this?
+    resizeBackgroundLayer: function() {
+        this.backgroundLayer.bounds = new GFX.Rect(0, 0, canvas.width,
+            canvas.height);
     }
 };
 
 $(function() {
-    // Load our image!
+    canvas = $('#c')[0];
+
+    var nLoaded = 0;
+    function loaded() {
+        if (++nLoaded == 2)
+            new Controller;
+    }
+
+    // Load our images!
     fishImage = new Image();
-    fishImage.onload = function() { new Controller; };
+    fishImage.onload = loaded;
     fishImage.src = 'fish.png';
+
+    backgroundImage = new Image();
+    backgroundImage.onload = loaded;
+    backgroundImage.src = 'background.jpg';
 });
 
