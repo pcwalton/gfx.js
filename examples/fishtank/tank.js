@@ -1,5 +1,5 @@
 /*
- *  thunderhead2/examples/fishtank/tank.js
+ *  gfx.js/examples/fishtank/tank.js
  *
  *  Copyright (c) 2011 Mozilla Foundation
  *  Patrick Walton <pcwalton@mozilla.com>
@@ -23,8 +23,8 @@ function Fish() {
     var width = (fishImage.width * size) | 0;
     var height = (fishImage.height * size) | 0;
 
-    var layer = this.layer = new Th2.ImageLayer(fishImage);
-    layer.bounds = new Th2.Rect((Math.random() * (canvasWidth - width)) | 0,
+    var layer = this.layer = new GFX.ImageLayer(fishImage);
+    layer.bounds = new GFX.Rect((Math.random() * (canvasWidth - width)) | 0,
         (Math.random() * (canvasHeight - height)) | 0, width, height);
 
     this.deltaX = (Math.random() - 0.5) * FISH_SWIM_SPEED;
@@ -59,10 +59,10 @@ Fish.prototype = {
 };
 
 function Controller() {
-    Th2.autoresizeCanvas(canvas);
+    GFX.autoresizeCanvas(canvas);
     $(window).resize(this.onResize.bind(this));
 
-    var rootLayer = new Th2.Layer(canvas);
+    var rootLayer = new GFX.Layer(canvas);
 
     var fishes = this.fishes = [];
     for (var i = 0; i < FISH_COUNT; i++) {
@@ -71,7 +71,7 @@ function Controller() {
         rootLayer.children.push(fish.layer);
     }
 
-    var renderer = this.renderer = new Th2.WebGLCanvasRenderer(canvas,
+    var renderer = this.renderer = new GFX.WebGLCanvasRenderer(canvas,
         rootLayer);
     renderer.onRender = this.onRender.bind(this);
     renderer.renderSoon();
@@ -93,7 +93,7 @@ Controller.prototype = {
     },
 
     onResize: function() {
-        Th2.autoresizeCanvas(canvas);
+        GFX.autoresizeCanvas(canvas);
     }
 };
 

@@ -1,38 +1,38 @@
 /*
- *  thunderhead2/thunderhead2.js
+ *  gfx.js/gfx.js
  *
  *  Copyright (c) 2011 Mozilla Foundation
  *  Patrick Walton <pcwalton@mozilla.com>
  */
 
-Th2 = (function() {
+GFX = (function() {
     // Exported classes and functions follow.
 
-    var Th2 = {};
+    var GFX = {};
 
     /*
      *  Utility functions and objects
      */
 
-    Th2.assert = function(cond, msg) {
+    GFX.assert = function(cond, msg) {
         if (cond)
             return;
 
         try {
-            throw new Error("Thunderhead2 assertion failed: " + msg);
+            throw new Error("gfx.js assertion failed: " + msg);
         } catch (ex) {
             console.error(ex + " at " + ex.stack);
             throw ex;
         }
     };
 
-    Th2.isPow2 = function(n) { return !(n & (n - 1)); };
+    GFX.isPow2 = function(n) { return !(n & (n - 1)); };
 
     // Fast algorithm from:
     //
     //  http://jeffreystedfast.blogspot.com/2008/06/
     //      calculating-nearest-power-of-2.html
-    Th2.nextPow2 = function(n) {
+    GFX.nextPow2 = function(n) {
         n |= n >> 1;
         n |= n >> 2;
         n |= n >> 4;
@@ -42,7 +42,7 @@ Th2 = (function() {
     };
 
     // Resizes a canvas to fit its boundaries.
-    Th2.autoresizeCanvas = function(canvas) {
+    GFX.autoresizeCanvas = function(canvas) {
         var canvasRect = canvas.getBoundingClientRect();
         var width = canvasRect.width, height = canvasRect.height;
         if (canvas.width != width)
@@ -54,7 +54,7 @@ Th2 = (function() {
     // Bare-bones class system, just enough to get more than one level of
     // prototypical inheritance off the ground.
 
-    Th2.Class = function() {
+    GFX.Class = function() {
         return function(subclass) {
             // FIXME: Doesn't work with getters and setters.
             for (var key in subclass)
@@ -65,7 +65,7 @@ Th2 = (function() {
     // Simple matrix class, based on glMatrix:
     //      http://code.google.com/p/glmatrix/source/browse/glMatrix.js  
 
-    Th2.Transform = function(otherTransform) {
+    GFX.Transform = function(otherTransform) {
         this.matrix = new Float32Array(16);
         this._scratch = new Float32Array(16);
         if (otherTransform != null)
@@ -74,7 +74,7 @@ Th2 = (function() {
             this.identity();
     };
 
-    Th2.Transform.prototype = {
+    GFX.Transform.prototype = {
         // Combines the two transforms by multiplying this matrix by the other
         // matrix on the left.
         combine: function(otherTransform) {
@@ -171,7 +171,7 @@ Th2 = (function() {
 
     // Simple rectangle class, vaguely Cocoa-ish
 
-    Th2.Rect = function(x, y, w, h) {
+    GFX.Rect = function(x, y, w, h) {
         if (typeof(x) === 'object') {
             // Initialize from a DOM object (ClientRect, perhaps).
             this.x = x.left || 0;
@@ -190,24 +190,24 @@ Th2 = (function() {
 
     // The root layer class
 
-    Th2.Layer = function(element) {
+    GFX.Layer = function(element) {
         this.children = [];
         if (element)
-            this.bounds = new Th2.Rect(element.getBoundingClientRect());
+            this.bounds = new GFX.Rect(element.getBoundingClientRect());
     }
 
-    Th2.LayerClass = new Th2.Class;
-    Th2.Layer.prototype = Th2.LayerClass.prototype = {};
+    GFX.LayerClass = new GFX.Class;
+    GFX.Layer.prototype = GFX.LayerClass.prototype = {};
 
     // Image layers
 
-    Th2.ImageLayer = function(image) {
-        Th2.Layer.call(this);
+    GFX.ImageLayer = function(image) {
+        GFX.Layer.call(this);
         this.image = image;
-        this.bounds = new Th2.Rect(image);
+        this.bounds = new GFX.Rect(image);
     }
 
-    Th2.ImageLayer.prototype = new Th2.LayerClass({});
+    GFX.ImageLayer.prototype = new GFX.LayerClass({});
 
     /*
      *  Renderers: objects that describe how to render the layers
@@ -217,13 +217,13 @@ Th2 = (function() {
 
     const VENDOR_PREFIXES = [ 'moz', 'webkit', 'o', 'ms' ];
 
-    Th2.Renderer = function() {
+    GFX.Renderer = function() {
         this._renderCallback = this._renderCallback.bind(this);
     }
 
-    Th2.RendererClass = new Th2.Class;
+    GFX.RendererClass = new GFX.Class;
 
-    Th2.RendererClass.prototype = {
+    GFX.RendererClass.prototype = {
         // This horrible thing avoids creating a new closure on every render.
         _renderCallback: function() { this.render(); },
 
@@ -287,13 +287,13 @@ void main() {\n\
         index: '_texCoordBufferIndex'
     };
 
-    Th2.WebGLCanvasRenderer = function(canvas, rootLayer) {
-        Th2.Renderer.call(this);
+    GFX.WebGLCanvasRenderer = function(canvas, rootLayer) {
+        GFX.Renderer.call(this);
 
         this.rootLayer = rootLayer;
         this._canvas = canvas;
 
-        this._mvpMatrix = new Th2.Transform();
+        this._mvpMatrix = new GFX.Transform();
 
         // Stack of matrices - basically a free list to avoid accumulating
         // garbage when rendering.
@@ -322,7 +322,7 @@ void main() {\n\
         this._buildVertexBuffers();
     };
 
-    Th2.WebGLCanvasRenderer.prototype = new Th2.RendererClass({
+    GFX.WebGLCanvasRenderer.prototype = new GFX.RendererClass({
         // Allocates space for @count values in one of the buffers
         // (POSITION_BUFFER or TEX_COORD_BUFFER), resizing the buffer if
         // necessary.
@@ -334,7 +334,7 @@ void main() {\n\
                 return index;
 
             // Scale up by a power of two.
-            var newLength = Th2.nextPow2(index + count);
+            var newLength = GFX.nextPow2(index + count);
             var newData = new Float32Array(newLength);
             for (var i = 0; i < data.length; i++)
                 newData[i] = data[i];
@@ -352,13 +352,13 @@ void main() {\n\
                 FRAGMENT_SHADER);
 
             var program = this._program = ctx.createProgram();
-            Th2.assert(program, "couldn't create program");
+            GFX.assert(program, "couldn't create program");
 
             ctx.attachShader(program, vertexShader);
             ctx.attachShader(program, fragmentShader);
 
             ctx.linkProgram(program);
-            Th2.assert(ctx.getProgramParameter(program, ctx.LINK_STATUS), {
+            GFX.assert(ctx.getProgramParameter(program, ctx.LINK_STATUS), {
                 toString: function() {
                     return "linking failed: " + ctx.getProgramInfoLog(program);
                 }
@@ -396,11 +396,11 @@ void main() {\n\
 
             var width = image.width, height = image.height;
             var widthScale, heightScale;
-            if (mipmap && (!Th2.isPow2(width) || !Th2.isPow2(height))) {
+            if (mipmap && (!GFX.isPow2(width) || !GFX.isPow2(height))) {
                 // Resize up to the next power of 2.
                 var canvas2d = document.createElement('canvas');
-                var textureWidth = canvas2d.width = Th2.nextPow2(width);
-                var textureHeight = canvas2d.height = Th2.nextPow2(height);
+                var textureWidth = canvas2d.width = GFX.nextPow2(width);
+                var textureHeight = canvas2d.height = GFX.nextPow2(height);
                 widthScale = width / textureWidth;
                 heightScale = height / textureHeight;
 
@@ -474,7 +474,7 @@ void main() {\n\
             var shader = ctx.createShader(type);
             ctx.shaderSource(shader, source);
             ctx.compileShader(shader);
-            Th2.assert(ctx.getShaderParameter(shader, ctx.COMPILE_STATUS), {
+            GFX.assert(ctx.getShaderParameter(shader, ctx.COMPILE_STATUS), {
                 toString: function() {
                     return "shader compilation failed: " +
                         ctx.getShaderInfoLog(shader);
@@ -522,7 +522,7 @@ void main() {\n\
                     var oldMatrix = matrixStack[matrixStack.size++];
                     oldMatrix.copyFrom(this._matrix);
                 } else {
-                    oldMatrix = new Th2.Transform(transform);
+                    oldMatrix = new GFX.Transform(transform);
                     matrixStack.push(oldMatrix);
                     matrixStack.size++;
                 }
@@ -586,7 +586,7 @@ void main() {\n\
     // Image layer rendering for WebGL
 
     // Initializes the WebGL portion of an image layer.
-    Th2.ImageLayer.prototype.initWebGL = function(renderer, ctx) {
+    GFX.ImageLayer.prototype.initWebGL = function(renderer, ctx) {
         if (this.webGLTextureInfo)
             return; // already done
 
@@ -606,9 +606,9 @@ void main() {\n\
      *  DOM renderer
      */
 
-    Th2.DOMRenderer = function() {
+    GFX.DOMRenderer = function() {
     }
 
-    return Th2;
+    return GFX;
 })();
 
