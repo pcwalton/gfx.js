@@ -740,15 +740,14 @@ void main() {\n\
                 // as much as we can, but this is really glorified browser
                 // detection, sadly...)
                 var html = document.documentElement;
-                if (html.style.MozTransform != null)
+                if (html.style.MozTransform != null) {
                     fn.transformer = '_mozTransformLayer';
-                else if (html.style.WebkitPerspective != null)
+                } else if (html.style.WebkitPerspective != null) {
                     fn.transformer = '_webkitTransformLayer';
-                else if (html.style.zoom != null)
-                    fn.transformer = '_ieTransformLayer';
-                else
+                } else {
                     throw new Error("TODO: fall back to absolute " +
                         "positioning");
+                }
             }
 
             this[fn.transformer](layer);
@@ -764,7 +763,17 @@ void main() {\n\
     // Container layer rendering for the DOM
 
     GFX.Layer.prototype.initDOM = function(parentNode) {
-        parentNode.appendChild(this.node = document.createElement('div'));
+        var node = this.node = document.createElement('div');
+        parentNode.appendChild(node);
+        this._positionDOMNode();
+    };
+
+    GFX.Layer.prototype._positionDOMNode = function() {
+        var node = this.node;
+        node.style.position = 'absolute';
+        node.style.left = node.style.top = 0;
+        node.style.MozTransformOrigin = node.style.WebkitTransformOrigin =
+            'left top';
     };
 
     // Image layer rendering for the DOM
@@ -776,6 +785,7 @@ void main() {\n\
         parentNode.appendChild(node);
         this.intrinsicWidth = image.width;
         this.intrinsicHeight = image.height;
+        this._positionDOMNode();
     };
 
     return GFX;

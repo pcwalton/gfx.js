@@ -89,12 +89,12 @@ function Controller() {
 
 Controller.prototype = {
     onRender: function() {
-        /*frameCount++;
+        frameCount++;
         if (new Date().getTime() >= frameStart + 1000) {
             console.log("fps " + frameCount);
             frameStart = new Date().getTime();
             frameCount = 0;
-        }*/
+        }
 
         this.resizeBackgroundLayer();
 
