@@ -675,52 +675,37 @@ void main() {\n\
         _genericTransformLayer: function(layer, transformOrigin, transform) {
             var fn = this._mozTransformLayer;
 
-            var node = layer.node;
-            if (node.style.position !== 'absolute')
-                node.style.position = 'absolute';
-            if (node.style.left !== 0)
-                node.style.left = 0;
-            if (node.style.top !== 0)
-                node.style.top = 0;
-            if (node.style[transformOrigin] !== 'left top')
-                node.style[transformOrigin] = 'left top';
-
             var strbuf;
-            if (layer.scalesContent) {
-                if (!fn.translateAndScaleBuf) {
-                    fn.translateAndScaleBuf = [
-                        'translate(', null, 'px,', null, 'px) ',
-                        'scale(', null, ', ', null, ')'
-                    ];
-                }
-                strbuf = fn.translateAndScaleBuf;
-            } else {
-                if (!fn.translateBuf) {
-                    fn.translateBuf = [
-                        'translate(', null, 'px,', null, 'px)'
-                    ];
-                }
-                strbuf = fn.translateBuf;
+            if (!fn.strbuf) {
+                fn.strbuf = [
+                    'matrix(', null, ', 0, 0, ', null, ', ', null, 'px, ',
+                    null, 'px)'
+                ];
             }
+            strbuf = fn.strbuf;
 
             var bounds = layer.bounds;
-            var x = bounds.x;
-            strbuf[3] = bounds.y;
+            var x = bounds.x, y = bounds.y;
 
             if (layer.scalesContent) {
                 var w = bounds.w / layer.intrinsicWidth;
-                if (layer.isFlipped)
+                if (layer.flipped) {
                     w = -w;
+                    x += bounds.w;
+                }
 
                 // TODO
 
-                strbuf[6] = w;
-                strbuf[8] = bounds.h / layer.intrinsicHeight;
+                strbuf[1] = w;
+                strbuf[3] = bounds.h / layer.intrinsicHeight;
+            } else {
+                strbuf[1] = strbuf[3] = 1;
             }
 
-            strbuf[1] = x;
+            strbuf[5] = x;
+            strbuf[7] = y;
 
-            node.style[transform] = strbuf.join("");
+            layer.node.style[transform] = strbuf.join("");
         },
 
         _mozTransformLayer: function(layer) {
