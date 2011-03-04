@@ -6,8 +6,6 @@
  */
 
 GFX = (function() {
-    // Exported classes and functions follow.
-
     var GFX = {};
 
     /*
@@ -173,15 +171,39 @@ GFX = (function() {
 
     GFX.Rect = function(x, y, w, h) {
         if (typeof(x) === 'object') {
-            // Initialize from a DOM object (ClientRect, perhaps).
-            this.x = x.left || 0;
-            this.y = x.top || 0;
-            this.w = x.width || 0;
-            this.h = x.height || 0;
+            if ('left' in x) {
+                // Initialize from a DOM object (ClientRect, perhaps).
+                this.x = x.left || 0;
+                this.y = x.top || 0;
+                this.w = x.width || 0;
+                this.h = x.height || 0;
+                return;
+            }
+
+            // Initialize from another Rect.
+            this.x = x.x;
+            this.y = x.y;
+            this.w = x.w;
+            this.h = x.h;
             return;
         }
 
         this.x = x; this.y = y; this.w = w; this.h = h;
+    };
+
+    GFX.Rect.prototype = {
+        copyFrom: function(otherRect) {
+            this.x = otherRect.x;
+            this.y = otherRect.y;
+            this.w = otherRect.w;
+            this.h = otherRect.h;
+        },
+
+        eq: function(otherRect) {
+            return otherRect && this.x === otherRect.x
+                && this.y === otherRect.y && this.w === otherRect.w
+                && this.h === otherRect.h;
+        }
     };
 
     /*
@@ -207,7 +229,9 @@ GFX = (function() {
         this.bounds = new GFX.Rect(image);
     }
 
-    GFX.ImageLayer.prototype = new GFX.LayerClass({});
+    GFX.ImageLayer.prototype = new GFX.LayerClass({
+        scalesContent: true
+    });
 
     /*
      *  Renderers: objects that describe how to render the layers
@@ -218,14 +242,28 @@ GFX = (function() {
     const VENDOR_PREFIXES = [ 'moz', 'webkit', 'o', 'ms' ];
 
     GFX.Renderer = function() {
-        this._renderCallback = this._renderCallback.bind(this);
+        var self = this;
+        this._renderCallback = function() { self.render(); };
     }
 
     GFX.RendererClass = new GFX.Class;
 
-    GFX.RendererClass.prototype = {
+    GFX.Renderer.prototype = GFX.RendererClass.prototype = {
         // This horrible thing avoids creating a new closure on every render.
         _renderCallback: function() { this.render(); },
+
+        _renderChildren: function(layer) {
+            var children = layer.children;
+            for (var i = 0; i < children.length; i++)
+                this._renderLayer(children[i], layer);
+        },
+
+        // Renders the layer tree.
+        render: function() {
+            this._needsRender = false;
+            if (this.onRender)
+                this.onRender();
+        },
 
         // Schedules a render operation at the next appropriate opportunity.
         // Use this method whenever you've made a change that doesn't
@@ -241,7 +279,8 @@ GFX = (function() {
                 } else {
                     // Sigh...
                     for (var i = 0; i < VENDOR_PREFIXES.length; i++) {
-                        var name = VENDOR_PREFIXES[i] + 'RequestAnimationFrame';
+                        var name = VENDOR_PREFIXES[i] +
+                            'RequestAnimationFrame';
                         if (window[name]) {
                             this.renderSoon._rafName = name;
                             break;
@@ -290,8 +329,8 @@ void main() {\n\
     GFX.WebGLCanvasRenderer = function(canvas, rootLayer) {
         GFX.Renderer.call(this);
 
-        this.rootLayer = rootLayer;
         this._canvas = canvas;
+        this.rootLayer = rootLayer;
 
         this._mvpMatrix = new GFX.Transform();
 
@@ -559,9 +598,7 @@ void main() {\n\
                 this._texCoordBufferIndex += 6*2;
             }
 
-            var children = layer.children;
-            for (var i = 0; i < children.length; i++)
-                this._renderLayer(children[i]);
+            this._renderChildren(layer);
 
             // Restore the old matrix.
             if (layer.transform)
@@ -570,9 +607,7 @@ void main() {\n\
 
         // Renders the layer tree.
         render: function() {
-            this._needsRender = false;
-            if (this.onRender)
-                this.onRender();
+            GFX.Renderer.prototype.render.call(this);
 
             var ctx = this._ctx, program = this._program;
             var canvas = this._canvas;
@@ -613,8 +648,135 @@ void main() {\n\
      *  DOM renderer
      */
 
-    GFX.DOMRenderer = function() {
-    }
+    GFX.DOMRenderer = function(rootNode, rootLayer) {
+        GFX.Renderer.call(this);
+        this._rootNode = rootNode;
+        this.rootLayer = rootLayer;
+    };
+
+    GFX.DOMRenderer.prototype = new GFX.RendererClass({
+        _renderLayer: function(layer, parent) {
+            if (!layer.node && layer.initDOM)
+                layer.initDOM(parent ? parent.node : document.body);
+
+            if (layer.node) {
+                if (!layer.bounds.eq(layer.prevBounds))
+                    this._transformLayer(layer);
+
+                if (layer.prevBounds)
+                    layer.prevBounds.copyFrom(layer.bounds);
+                else
+                    layer.prevBounds = new GFX.Rect(layer.bounds);
+            }
+
+            this._renderChildren(layer);
+        },
+
+        _genericTransformLayer: function(layer, transformOrigin, transform) {
+            var fn = this._mozTransformLayer;
+
+            var node = layer.node;
+            if (node.style.position !== 'absolute')
+                node.style.position = 'absolute';
+            if (node.style.left !== 0)
+                node.style.left = 0;
+            if (node.style.top !== 0)
+                node.style.top = 0;
+            if (node.style[transformOrigin] !== 'left top')
+                node.style[transformOrigin] = 'left top';
+
+            var strbuf;
+            if (layer.scalesContent) {
+                if (!fn.translateAndScaleBuf) {
+                    fn.translateAndScaleBuf = [
+                        'translate(', null, 'px,', null, 'px) ',
+                        'scale(', null, ', ', null, ')'
+                    ];
+                }
+                strbuf = fn.translateAndScaleBuf;
+            } else {
+                if (!fn.translateBuf) {
+                    fn.translateBuf = [
+                        'translate(', null, 'px,', null, 'px)'
+                    ];
+                }
+                strbuf = fn.translateBuf;
+            }
+
+            var bounds = layer.bounds;
+            var x = bounds.x;
+            strbuf[3] = bounds.y;
+
+            if (layer.scalesContent) {
+                var w = bounds.w / layer.intrinsicWidth;
+                if (layer.isFlipped)
+                    w = -w;
+
+                // TODO
+
+                strbuf[6] = w;
+                strbuf[8] = bounds.h / layer.intrinsicHeight;
+            }
+
+            strbuf[1] = x;
+
+            node.style[transform] = strbuf.join("");
+        },
+
+        _mozTransformLayer: function(layer) {
+            return this._genericTransformLayer(layer, 'MozTransformOrigin',
+                'MozTransform');
+        },
+
+        _webkitTransformLayer: function(layer) {
+            return this._genericTransformLayer(layer, 'WebkitTransformOrigin',
+                'WebkitTransform');
+        },
+
+        _transformLayer: function(layer) {
+            var fn = this._transformLayer;
+            if (!fn.transformer) {
+                // Figure out which engine to use. (Try to be feature-detect-y
+                // as much as we can, but this is really glorified browser
+                // detection, sadly...)
+                var html = document.documentElement;
+                if (html.style.MozTransform != null)
+                    fn.transformer = '_mozTransformLayer';
+                else if (html.style.WebkitPerspective != null)
+                    fn.transformer = '_webkitTransformLayer';
+                else if (html.style.zoom != null)
+                    fn.transformer = '_ieTransformLayer';
+                else
+                    throw new Error("TODO: fall back to absolute " +
+                        "positioning");
+            }
+
+            this[fn.transformer](layer);
+        },
+
+        // Renders the layer tree.
+        render: function() {
+            GFX.Renderer.prototype.render.call(this);
+            this._renderLayer(this.rootLayer);
+        }
+    });
+
+    // Container layer rendering for the DOM
+
+    GFX.Layer.prototype.initDOM = function(parentNode) {
+        parentNode.appendChild(this.node = document.createElement('div'));
+    };
+
+    // Image layer rendering for the DOM
+
+    // Initializes the DOM node for an image layer.
+    GFX.ImageLayer.prototype.initDOM = function(parentNode) {
+        var image = this.image;
+        var node = this.node = image.cloneNode(false);
+        parentNode.appendChild(node);
+        this.intrinsicWidth = image.width;
+        this.intrinsicHeight = image.height;
+    };
 
     return GFX;
 })();

@@ -5,10 +5,10 @@
  *  Patrick Walton <pcwalton@mozilla.com>
  */
 
-const FISH_COUNT = 10000;
+const FISH_COUNT = 300;
 const FISH_SWIM_SPEED = 10;
-const FISH_MAX_SIZE = 0.1;
-const FISH_MIN_SIZE = 0.05;
+const FISH_MAX_SIZE = 0.3;
+const FISH_MIN_SIZE = 0.1;
 
 var canvas;
 var backgroundImage, fishImage;
@@ -49,7 +49,7 @@ Fish.prototype = {
                 (y > canvasHeight - h && this.deltaY > 0))
             this.deltaY = -this.deltaY;
 
-        this.layer.flipped = this.deltaX < 0;
+        this.layer.flipped = this.deltaX > 0;
 
         bounds.x = x;
         bounds.y = y;
@@ -59,8 +59,12 @@ Fish.prototype = {
 };
 
 function Controller() {
+    var self = this;
+    function onRender() { self.onRender(); }
+    function onResize() { self.onResize(); }
+
     GFX.autoresizeCanvas(canvas);
-    $(window).resize(this.onResize.bind(this));
+    $(window).resize(onResize);
 
     var rootLayer = new GFX.Layer(canvas);
 
@@ -76,9 +80,10 @@ function Controller() {
         rootLayer.children.push(fish.layer);
     }
 
-    var renderer = this.renderer = new GFX.WebGLCanvasRenderer(canvas,
-        rootLayer);
-    renderer.onRender = this.onRender.bind(this);
+    //var renderer = new GFX.WebGLCanvasRenderer(canvas, rootLayer);
+    var renderer = new GFX.DOMRenderer(canvas, rootLayer);
+    this.renderer = renderer;
+    renderer.onRender = onRender;
     renderer.renderSoon();
 }
 
