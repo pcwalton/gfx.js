@@ -271,26 +271,35 @@ GFX = (function() {
         renderSoon: function() {
             if (this._needsRender)
                 return;
+
+            var fn = this.renderSoon;
+
             this._needsRender = true;
 
-            if (!this.renderSoon._rafName) {
+            if (!fn._rafName) {
                 if (window.requestAnimationFrame) {
-                    this.renderSoon._rafName = 'requestAnimationFrame';
+                    fn._rafName = 'requestAnimationFrame';
                 } else {
                     // Sigh...
                     for (var i = 0; i < VENDOR_PREFIXES.length; i++) {
                         var name = VENDOR_PREFIXES[i] +
                             'RequestAnimationFrame';
                         if (window[name]) {
-                            this.renderSoon._rafName = name;
+                            fn._rafName = name;
                             break;
                         }
                     }
+
+                    fn._rafName = 'setTimeout';
                 }
             }
 
             this.self = this;
-            window[this.renderSoon._rafName](this._renderCallback);
+
+            if (fn._rafName === 'setTimeout')
+                window.setTimeout(this._renderCallback, 16);
+            else
+                window[fn._rafName](this._renderCallback);
         }
     };
 
@@ -672,18 +681,8 @@ void main() {\n\
             this._renderChildren(layer);
         },
 
-        _genericTransformLayer: function(layer, transformOrigin, transform) {
-            var fn = this._mozTransformLayer;
-
-            var strbuf;
-            if (!fn.strbuf) {
-                fn.strbuf = [
-                    'matrix(', null, ', 0, 0, ', null, ', ', null, 'px, ',
-                    null, 'px)'
-                ];
-            }
-            strbuf = fn.strbuf;
-
+        _genericTransformLayer:
+        function(layer, transform, strbuf, xIndex, yIndex, wIndex, hIndex) {
             var bounds = layer.bounds;
             var x = bounds.x, y = bounds.y;
 
@@ -696,26 +695,48 @@ void main() {\n\
 
                 // TODO
 
-                strbuf[1] = w;
-                strbuf[3] = bounds.h / layer.intrinsicHeight;
+                strbuf[wIndex] = w.toFixed(5);
+                strbuf[hIndex] = (bounds.h / layer.intrinsicHeight).toFixed(5);
             } else {
-                strbuf[1] = strbuf[3] = 1;
+                strbuf[wIndex] = strbuf[hIndex] = 1;
             }
 
-            strbuf[5] = x;
-            strbuf[7] = y;
+            strbuf[xIndex] = x.toFixed(5);
+            strbuf[yIndex] = y.toFixed(5);
 
             layer.node.style[transform] = strbuf.join("");
+
+            console.log(strbuf.join(""));
         },
 
         _mozTransformLayer: function(layer) {
-            return this._genericTransformLayer(layer, 'MozTransformOrigin',
-                'MozTransform');
+            var fn = this._mozTransformLayer;
+            if (!fn.strbuf) {
+                fn.strbuf = [
+                    'matrix(', null, ', 0, 0, ', null, ', ', null, 'px, ',
+                    null, 'px)'
+                ];
+            }
+
+            return this._genericTransformLayer(layer, 'MozTransform',
+                fn.strbuf, 5, 7, 1, 3);
         },
 
         _webkitTransformLayer: function(layer) {
-            return this._genericTransformLayer(layer, 'WebkitTransformOrigin',
-                'WebkitTransform');
+            var fn = this._webkitTransformLayer;
+            if (!fn.strbuf) {
+                fn.strbuf = [
+                    //              1     2  3  4  5
+                    'matrix3d(', null, ', 0, 0, 0, 0, ',
+                    //              6     7  8  9 10 11 12
+                                 null, ', 0, 0, 0, 0, 0, 0, ',
+                    //             13          14  15 16
+                                 null, ', ', null, '0, 0)'
+                ];
+            }
+
+            return this._genericTransformLayer(layer, 'WebkitTransform',
+                fn.strbuf, 5, 7, 1, 3);
         },
 
         _transformLayer: function(layer) {

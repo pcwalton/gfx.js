@@ -5,10 +5,10 @@
  *  Patrick Walton <pcwalton@mozilla.com>
  */
 
-const FISH_COUNT = 300;
+const FISH_COUNT = 20000;
 const FISH_SWIM_SPEED = 10;
-const FISH_MAX_SIZE = 0.3;
-const FISH_MIN_SIZE = 0.1;
+const FISH_MAX_SIZE = 0.05;
+const FISH_MIN_SIZE = 0.02;
 
 var canvas;
 var backgroundImage, fishImage;
@@ -80,8 +80,8 @@ function Controller() {
         rootLayer.children.push(fish.layer);
     }
 
-    //var renderer = new GFX.WebGLCanvasRenderer(canvas, rootLayer);
-    var renderer = new GFX.DOMRenderer(canvas, rootLayer);
+    var renderer = new GFX.WebGLCanvasRenderer(canvas, rootLayer);
+    //var renderer = new GFX.DOMRenderer(canvas, rootLayer);
     this.renderer = renderer;
     renderer.onRender = onRender;
     renderer.renderSoon();
