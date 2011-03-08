@@ -436,21 +436,21 @@ void main() {\n\
             this._texCoordBufferIndex = 0;
         },
 
-        // Creates or reuses a texture for the given image.
-        _createImageTexture: function(image, mipmap) {
+        // Creates or reuses a texture for the given image and region.
+        _createImageTexture: function(image, mipmap, region) {
             var key = mipmap + ':' + image.src;
             if (key in this._imageTextureCache)
                 return this._imageTextureCache[key];
 
             var width = image.width, height = image.height;
-            var widthScale, heightScale;
+            var resultTexX = 0, resultTexY = 0, resultTexW, resultTexH;
             if (mipmap && (!GFX.isPow2(width) || !GFX.isPow2(height))) {
                 // Resize up to the next power of 2.
                 var canvas2d = document.createElement('canvas');
                 var textureWidth = canvas2d.width = GFX.nextPow2(width);
                 var textureHeight = canvas2d.height = GFX.nextPow2(height);
-                widthScale = width / textureWidth;
-                heightScale = height / textureHeight;
+                resultTexW = width / textureWidth;
+                resultTexH = height / textureHeight;
 
                 var ctx2d = canvas2d.getContext('2d');
                 ctx2d.drawImage(image, 0, 0);
@@ -458,7 +458,17 @@ void main() {\n\
 
                 console.log("size: " + textureWidth + " / " + textureHeight);
             } else {
-                widthScale = heightScale = 1;
+                resultTexW = resultTexH = 1;
+            }
+
+            if (region) {
+                resultTexX += region.x / width;
+                resultTexY += region.y / height;
+                resultTexW -= resultTexX;
+                resultTexH -= resultTexY;
+
+                resultTexW *= region.w / width;
+                resultTexH *= region.h / height;
             }
 
             var ctx = this._ctx;
@@ -484,8 +494,10 @@ void main() {\n\
 
             return (this._imageTextureCache[key] = {
                 texture: texture,
-                widthScale: widthScale,
-                heightScale: heightScale
+                x: resultTexX,
+                y: resultTexY,
+                w: resultTexW,
+                h: resultTexH
             });
         },
 
@@ -603,7 +615,7 @@ void main() {\n\
 
                 index = this._allocBuffer(TEX_COORD_BUFFER, 6*2);
                 this._createTextureCoords(this._texCoordBufferData, index,
-                    textureInfo.widthScale, textureInfo.heightScale);
+                    textureInfo.w, textureInfo.h);
                 this._texCoordBufferIndex += 6*2;
             }
 
@@ -650,7 +662,7 @@ void main() {\n\
         }
 
         this.webGLTextureInfo = renderer._createImageTexture(this.image,
-            mipmap);
+            mipmap, this.region);
     };
 
     /*

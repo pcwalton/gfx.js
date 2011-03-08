@@ -5,10 +5,10 @@
  *  Patrick Walton <pcwalton@mozilla.com>
  */
 
-const FISH_COUNT = 20000;
+const FISH_COUNT = 200;
 const FISH_SWIM_SPEED = 10;
-const FISH_MAX_SIZE = 0.05;
-const FISH_MIN_SIZE = 0.02;
+const FISH_MAX_SIZE = 0.5;
+const FISH_MIN_SIZE = 0.2;
 
 var canvas;
 var backgroundImage, fishImage;
@@ -131,6 +131,6 @@ $(function() {
 
     backgroundImage = new Image();
     backgroundImage.onload = loaded;
-    backgroundImage.src = 'background.jpg';
+    backgroundImage.src = 'background-flip2.jpg';
 });
 
